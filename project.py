@@ -1,16 +1,19 @@
-def recommend_plan(user_input):
-    # Extract user information
-    age = user_input.get('age', 0)
-    smoker = user_input.get('smoker', False)
-    bmi = user_input.get('bmi', 0)
-    income = user_input.get('income', 0)
-    family_size = user_input.get('family_size', 1)
-    chronic_condition = user_input.get('chronic_condition', False)
-    preventive_care_needed = user_input.get('preventive_care_needed', False)
-    frequent_medical_visits = user_input.get('frequent_medical_visits', False)
-    healthy = user_input.get('healthy', True)  # Defaults to True if not specified
+from flask import Flask, render_template, request
 
-    # Plan recommendations based on rules
+app = Flask(__name__)
+
+# Recommendation function
+def recommend_plan(user_input):
+    age = int(user_input.get('age', 0))
+    smoker = user_input.get('smoker', 'no').lower() == 'yes'
+    bmi = float(user_input.get('bmi', 0))
+    income = float(user_input.get('income', 0))
+    family_size = int(user_input.get('family_size', 1))
+    chronic_condition = user_input.get('chronic_condition', 'no').lower() == 'yes'
+    preventive_care_needed = user_input.get('preventive_care_needed', 'no').lower() == 'yes'
+    frequent_medical_visits = user_input.get('frequent_medical_visits', 'no').lower() == 'yes'
+    healthy = user_input.get('healthy', 'yes').lower() == 'yes'
+
     if age < 30 and smoker:
         return "Plan: High Deductible with Preventive Care for Smokers"
     elif family_size > 3 and income < 30000:
@@ -46,18 +49,16 @@ def recommend_plan(user_input):
     else:
         return "Plan: Basic Coverage"
 
-# Example usage
-user = {
-    "age": 29,
-    "smoker": True,
-    "bmi": 28,
-    "income": 40000,
-    "family_size": 1,
-    "chronic_condition": False,
-    "preventive_care_needed": True,
-    "frequent_medical_visits": False,
-    "healthy": False
-}
+# Routes
+@app.route('/')
+def home():
+    return render_template('index.html')
 
-plan = recommend_plan(user)
-print(plan)  # Outputs the recommended plan
+@app.route('/recommend', methods=['POST'])
+def recommend():
+    user_input = request.form
+    recommendation = recommend_plan(user_input)
+    return render_template('result.html', recommendation=recommendation)
+
+if __name__ == '__main__':
+    app.run(debug=True)
