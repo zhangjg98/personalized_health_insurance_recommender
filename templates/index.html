@@ -17,7 +17,10 @@
         </select><br><br>
         
         <label for="smoker">Are you a smoker? (yes/no):</label>
-        <input type="text" id="smoker" name="smoker" required><br><br>
+        <select id="smoker" name="smoker">
+            <option value="no">no</option>
+            <option value="yes">yes</option>
+        </select><br><br>
 
         <label for="bmi">BMI Range:</label>
         <select id="bmi" name="bmi">
@@ -34,16 +37,28 @@
         <input type="number" id="family_size" name="family_size" required><br><br>
 
         <label for="chronic_condition">Do you have a chronic condition? (yes/no):</label>
-        <input type="text" id="chronic_condition" name="chronic_condition" required><br><br>
+        <select id="chronic_condition" name="chronic_condition">
+            <option value="no">no</option>
+            <option value="yes">yes</option>
+        </select><br><br>
 
         <label for="preventive_care_needed">Do you need preventive care? (yes/no):</label>
-        <input type="text" id="preventive_care_needed" name="preventive_care_needed" required><br><br>
+        <select id="preventive_care_needed" name="preventive_care_needed">
+            <option value="no">no</option>
+            <option value="yes">yes</option>
+        </select><br><br>
 
         <label for="frequent_medical_visits">Do you have frequent medical visits? (yes/no):</label>
-        <input type="text" id="frequent_medical_visits" name="frequent_medical_visits" required><br><br>
+        <select id="frequent_medical_visits" name="frequent_medical_visits">
+            <option value="no">no</option>
+            <option value="yes">yes</option>
+        </select><br><br>
 
         <label for="healthy">Are you generally healthy? (yes/no):</label>
-        <input type="text" id="healthy" name="healthy" required><br><br>
+        <select id="healthy" name="healthy">
+            <option value="yes">yes</option>
+            <option value="no">no</option>
+        </select><br><br>
 
         <button type="submit">Get Recommendation</button>
     </form>
