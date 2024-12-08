@@ -18,28 +18,31 @@
         
         <label for="smoker">Are you a smoker? (yes/no):</label>
         <select id="smoker" name="smoker">
-            <option value="no">no</option>
-            <option value="yes">yes</option>
+            <option value="no">No</option>
+            <option value="yes">Yes</option>
         </select><br><br>
 
-        <label for="bmi">BMI Range:</label>
+        <label for="bmi">BMI Range (optional):</label>
         <select id="bmi" name="bmi">
+            <option value="">Prefer not to say</option>
             <option value="underweight">(<18.5)</option>
             <option value="normal">(18.5–24.9)</option>
             <option value="overweight">(25.0–29.9)</option>
             <option value="obese">(30+)</option>
         </select><br><br>
 
-        <label for="income">Annual Income (USD):</label>
+        <label for="income">Annual Income (USD) (optional):</label>
         <select id="income" name="income">
+            <option value="">Prefer not to say</option>
             <option value="below_30000">Below $30,000</option>
             <option value="30000_to_74999">$30,000–$74,999</option>
             <option value="75000_to_99999">$75,000–$99,999</option>
             <option value="above_100000">Above $100,000</option>
         </select><br><br>
         
-        <label for="family_size">Family Size:</label>
+        <label for="family_size">Family Size (optional):</label>
         <select id="family_size" name="family_size">
+            <option value="">Prefer not to say</option>
             <option value="1">1 person</option>
             <option value="2_to_3">2–3 people</option>
             <option value="4_plus">4+ people</option>
@@ -47,16 +50,18 @@
         
         <label for="chronic_condition">Do you have a chronic condition? (yes/no):</label>
         <select id="chronic_condition" name="chronic_condition">
-            <option value="no">no</option>
-            <option value="yes">yes</option>
+            <option value="no">No</option>
+            <option value="yes">Yes</option>
         </select><br><br>
 
         <label for="medical_care_frequency">How often do you need medical visits?:</label>
         <select id="medical_care_frequency" name="medical_care_frequency">
-            <option value="Low">Low</option>
-            <option value="Moderate">Moderate</option>
-            <option value="High">High</option>
+            <option value="Low">Rarely</option>
+            <option value="Moderate">Sometimes</option>
+            <option value="High">Often</option>
         </select><br><br>
+
+        <p>Fields marked as optional are not required but help us provide more accurate recommendations.</p>
 
         <button type="submit">Get Recommendation</button>
     </form>
