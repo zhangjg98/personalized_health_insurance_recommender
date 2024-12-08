@@ -13,26 +13,20 @@ def recommend_plan(user_input):
     preventive_care_needed = user_input.get('preventive_care_needed', 'no').lower() == 'yes'
     frequent_medical_visits = user_input.get('frequent_medical_visits', 'no').lower() == 'yes'
 
-    # Categorizing the age ranges
-    if age_range == "18-29":
-        age_group = "young_adult"
-    elif age_range == "30-59":
-        age_group = "adult"
-    else:
-        age_group = "senior"
     
+    age_group = age_range.lower() # Use age range directly from dropdown to assign to appropriate category
     bmi_category = bmi_range.lower()  # Use BMI range directly from dropdown to assign to appropriate category
 
     if age_group == "young_adult" and smoker:
         return "Plan: High Deductible with Preventive Care for Smokers"
-    elif family_size > 3 and income < 30000:
+    elif family_size > 3 and income < 40000:
         return "Plan: Subsidized Family Coverage"
     elif age_range == "senior" and chronic_condition:
         return "Plan: Comprehensive Low-Deductible with Specialist Access"
-    elif age_range == "young_adult":
-        return "Plan: Low Premium, High Deductible"
-    elif age_range == "senior":
-        return "Plan: Comprehensive Coverage"
+    elif bmi_category == "underweight":
+        return "Plan: Specialized Nutritional Support Coverage"
+    elif age_group == "adult" and bmi_category in ["overweight", "obese"] and smoker:
+        return "Plan: Wellness and Preventive Care Plan for Adults"
     elif smoker:
         return "Plan: Preventive Care for Smokers"
     elif bmi_category == "obese":
@@ -51,13 +45,17 @@ def recommend_plan(user_input):
         return "Plan: Preventive Care Coverage"
     elif frequent_medical_visits:
         return "Plan: Low-Deductible Plan"
-    if age_group == "young_adult" and bmi_category == "normal" and not smoker:
+    elif age_group == "young_adult" and bmi_category == "normal" and not smoker:
         return "Plan: High Deductible, Low Premium for Young and Healthy"
     elif income > 75000:
         return "Plan: High Deductible with HSA"
+    elif age_range == "young_adult":
+        return "Plan: Low Premium, High Deductible"
+    elif age_range == "senior":
+        return "Plan: Comprehensive Coverage"
     else:
-        return "Plan: Basic Coverage"
-
+        return "Plan: Standard Comprehensive Coverage"
+    
 # Routes
 @app.route('/')
 def home():
