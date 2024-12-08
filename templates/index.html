@@ -3,10 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Health Insurance Recommender</title>
+    <title>Personalized Health Insurance Recommender</title>
 </head>
 <body>
-    <h1>Health Insurance Recommender</h1>
+    <h1>Personalized Health Insurance Recommender</h1>
     <form action="/recommend" method="post">
         
         <label for="age">Age Range:</label>
@@ -31,33 +31,31 @@
         </select><br><br>
 
         <label for="income">Annual Income (USD):</label>
-        <input type="number" step="0.01" id="income" name="income" required><br><br>
-
+        <select id="income" name="income">
+            <option value="below_30000">Below $30,000</option>
+            <option value="30000_to_74999">$30,000–$74,999</option>
+            <option value="75000_to_99999">$75,000–$99,999</option>
+            <option value="above_100000">Above $100,000</option>
+        </select><br><br>
+        
         <label for="family_size">Family Size:</label>
-        <input type="number" id="family_size" name="family_size" required><br><br>
-
+        <select id="family_size" name="family_size">
+            <option value="1">1 person</option>
+            <option value="2_to_3">2–3 people</option>
+            <option value="4_plus">4+ people</option>
+        </select><br><br>
+        
         <label for="chronic_condition">Do you have a chronic condition? (yes/no):</label>
         <select id="chronic_condition" name="chronic_condition">
             <option value="no">no</option>
             <option value="yes">yes</option>
         </select><br><br>
 
-        <label for="preventive_care_needed">Do you need preventive care? (yes/no):</label>
-        <select id="preventive_care_needed" name="preventive_care_needed">
-            <option value="no">no</option>
-            <option value="yes">yes</option>
-        </select><br><br>
-
-        <label for="frequent_medical_visits">Do you have frequent medical visits? (yes/no):</label>
-        <select id="frequent_medical_visits" name="frequent_medical_visits">
-            <option value="no">no</option>
-            <option value="yes">yes</option>
-        </select><br><br>
-
-        <label for="healthy">Are you generally healthy? (yes/no):</label>
-        <select id="healthy" name="healthy">
-            <option value="yes">yes</option>
-            <option value="no">no</option>
+        <label for="medical_care_frequency">How often do you need medical visits?:</label>
+        <select id="medical_care_frequency" name="medical_care_frequency">
+            <option value="Low">Low</option>
+            <option value="Moderate">Moderate</option>
+            <option value="High">High</option>
         </select><br><br>
 
         <button type="submit">Get Recommendation</button>
