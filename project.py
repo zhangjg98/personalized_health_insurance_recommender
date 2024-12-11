@@ -76,27 +76,53 @@ def recommend_plan(user_input):
     # Family size adjustments
     if family_size == "4_plus":
         if income == "above_100000":
-            return "Plan Recommendation: Consider Preferred Provider Organization (PPO) Plans with Family Coverage and Comprehensive Benefits"
-        return "Plan Recommendation: Consider Family Coverage with Pediatric and Maternity Benefits"
+            return {
+                "plan": "Plan Recommendation: Consider Preferred Provider Organization (PPO) Plans with Family Coverage and Comprehensive Benefits",
+                "justification": "PPO plans give great flexibility that allow you to see doctors in and outside of the plan network. You ensure that your family members will get the care they need while not restricting them "
+            }
+        return {
+            "plan": "Plan Recommendation: Consider Family Coverage with Pediatric and Maternity Benefits",
+            "justification": "Pediatric and maternity benefits will help cover medical care for children and mothers (for pregnancy and childbirth) respectively. Making sure that your family gets the benefits they need is important with a family."
+        }
 
     # Generalized Income-based recommendations
     if income == "below_30000":
-        return "Plan Recommendation: Low Cost or Subsidized Options"
+        return {
+            "plan": "Plan Recommendation: Low Cost or Subsidized Coverage",
+            "justification": "Low cost plans ensure that you stay covered for basic medical needs. Subsidized coverage is health coverage that come at reduced or low costs for people below certain income thresholds. Both are affordable ways to ensure you still get sufficient medical coverage."
+        }
     elif income in ["75000_to_99999", "30000_to_74999"]:
-         return "Plan Recommendation: High Deductible Health Plans (HDHPs) with Health Savings Account (HSA)"
+         return {
+             "plan": "Plan Recommendation: High Deductible Health Plans (HDHPs) with Health Savings Account (HSA)",
+             "justification": "HDHPs have high deductibles and low premiums. A HSA allows you to pay that deductible amount and other medical costs with money set aside in an account where you can contribute and withdraw tax-free. HDHPs and HSAs usually go hand in hand, making them a solid option for people in your income range."
+         }
     elif income == "above_100000":
-        return "Plan Recommendation: Preferred Provider Organization (PPO) Plans that Ensure Flexibility"
+        return {
+            "plan": "Plan Recommendation: Preferred Provider Organization (PPO) Plans that Ensure Flexibility",
+            "justification": "PPO plans give great flexibility that allow you to see doctors in and outside of the plan network. You can get the care that you want at any provider you would like, though costs will be lower if you do choose to go with an in-network provider."
+        }
         
     # General Chronic Condition and Medical Care Frequency Recommendations
     if chronic_condition == "yes" and medical_care_frequency == "Low":
-         return "Plan Recommendation: Medication Management Plan for Chronic Conditions"
+         return {
+             "plan": "Plan Recommendation: Medication Therapy Management Program for Chronic Conditions",
+             "justification": "If you do not need to see a doctor frequently but have a chronic condition, a medication therapy management program might be suited for you. This plan makes sure that you take your medications correctly and safely, and basic services related to your condition come at no cost."
+         }
     elif chronic_condition == "yes":
-         return "Plan Recommendation: Chronic Care Coverage"
+         return {
+             "plan": "Plan Recommendation: Chronic Care Coverage",
+             "justification": "Chronic care coverage is a Medicare program that helps with chronic conditions. Services include a comprehensive care plan that lists your health problems and goals as well as provide needed medication and urgent care needs."
+         }
     elif medical_care_frequency == "High":
-         return "Plan Recommendation: Low-Deductible Plan"
+         return {
+                "plan": "Plan Recommendation: Low-Deductible Plan",
+                "justification": "If you need frequent medical care, having a plan with a low deductible would be most preferable for you. Low deductible plans ensure that your out of pocket costs will be low, as you only need to hit a low threshold before your insurance covers your medical costs."
+            }
     elif medical_care_frequency == "Low":
-        return "Plan Recommendation: High-Deductible, Low Premium Plan"
-
+         return {
+                "plan": "Plan Recommendation: High Deductible, Low-Premium Plan",
+                "justification": "If you are not in need of frequent medical care, having a plan with high deductible and low premium can be well suited for you. These plans will keep you insured in case for getting sick or injured, and the low monthly premiums will ensure that you do not have to pay too much to stay insured."
+            }
     # General fallback
     return {
         "plan": "Plan Recommendation: Contact a representative for personalized advice",
