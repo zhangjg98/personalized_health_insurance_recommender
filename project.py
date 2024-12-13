@@ -84,6 +84,12 @@ def recommend_plan(user_input):
             "plan": "Plan Recommendation: Consider Family Coverage with Pediatric and Maternity Benefits",
             "justification": "Pediatric and maternity benefits will help cover medical care for children and mothers (for pregnancy and childbirth) respectively. Making sure that your family gets the benefits they need is important with a family."
         }
+    elif family_size == "2_to_3":
+        return {
+            "plan": "Plan Recommendation: Consider Family Plans with Preventive Care and Moderate Deductibles",
+            "justification": "For smaller families, a family health plan that balances affordability with services like preventive care is ideal. Moderate deductibles ensure manageable out-of-pocket costs while providing coverage for routine check-ups and family-specific needs."
+        }
+
 
     # Generalized Income-based recommendations
     if income == "below_30000":
