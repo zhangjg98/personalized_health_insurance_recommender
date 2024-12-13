@@ -123,6 +123,12 @@ def recommend_plan(user_input):
                 "plan": "Plan Recommendation: High Deductible, Low-Premium Plan",
                 "justification": "If you are not in need of frequent medical care, having a plan with high deductible and low premium can be well suited for you. These plans will keep you insured in case for getting sick or injured, and the low monthly premiums will ensure that you do not have to pay too much to stay insured."
             }
+    elif medical_care_frequency == "Moderate":
+        return {
+            "plan": "Plan Recommendation: Moderate Deductible Plan",
+            "justification": "For someone who needs occasional medical care, a moderate deductible plan offers a good balance. It ensures manageable out-of-pocket costs while keeping premiums lower than low-deductible plans."
+        }
+    
     # General fallback
     return {
         "plan": "Plan Recommendation: Contact a representative for personalized advice",
