@@ -39,6 +39,12 @@ def recommend_plan(user_input):
     # Age-based recommendations
     if age_group == "young_adult":
         if income == "below_30000":
+            if chronic_condition == "yes":
+                return {
+                "plan": "Plan Recommendation: Strongly Consider Medicaid or Subsidized Marketplace Plan with Chronic Care Management Services",
+                "justification": "Young adults with low income and a chronic condition should prioritize Medicaid (if eligible) or subsidized marketplace plans. Medicaid is a government program that provides comprehensive benefits for low-income individuals at little to no cost. If you are not eligible for Medicaid, prioritize a low-cost plan or subsidized that still provides chronic care management services."
+                }
+
             return {
                 "plan": "Plan Recommendation: Catastrophic Health Plan",
                 "justification": "Young adults with low income can benefit from catastrophic policies. These policies cover numerous essential health benefits like other marketplace plans, including preventive services at no cost. They have low monthly premiums and very high deductibles, making them an affordable option for low-income young adults."
@@ -94,7 +100,7 @@ def recommend_plan(user_input):
     # Generalized Income-based recommendations
     if income == "below_30000":
         return {
-            "plan": "Plan Recommendation: Low Cost or Subsidized Coverage",
+            "plan": "Plan Recommendation: Consider Low Cost or Subsidized Coverage",
             "justification": "Low cost plans ensure that you stay covered for basic medical needs. Subsidized coverage is health coverage that come at reduced or low costs for people below certain income thresholds. Both are affordable ways to ensure you still get sufficient medical coverage."
         }
     elif income in ["75000_to_99999", "30000_to_74999"]:
