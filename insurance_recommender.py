@@ -42,7 +42,7 @@ def recommend_plan(user_input):
             if chronic_condition == "yes":
                 return {
                 "plan": "Plan Recommendation: Strongly Consider Medicaid or Subsidized Marketplace Plan with Chronic Care Management Services",
-                "justification": "Young adults with low income and a chronic condition should prioritize Medicaid (if eligible) or subsidized marketplace plans. Medicaid is a government program that provides comprehensive benefits for low-income individuals at little to no cost. If you are not eligible for Medicaid, prioritize a low-cost plan or subsidized that still provides chronic care management services."
+                "justification": "Young adults with low income and a chronic condition should prioritize Medicaid (if eligible) or subsidized marketplace plans. Medicaid is a government program that provides comprehensive benefits for low-income individuals at little to no cost. If you are not eligible for Medicaid, prioritize a low-cost plan or subsidized plan that still provides chronic care management services."
                 }
 
             return {
