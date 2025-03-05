@@ -1,6 +1,6 @@
 # Personalized Health Insurance Recommender
 
-This program is a simple health insurance plan recommendation system built using Flask and propositional logic. It provides plan suggestions based on user input for fields such as age, income, BMI, smoker status, and more.
+This program is a simple health insurance plan recommendation system built using Flask and propositional logic. It provides plan suggestions based on user input for fields such as age, income, BMI, smoker status, and more. It is currently in the process of being re-purposed to incorporate machine learning to handle more complex cases.
 
 ## How the Code Works
 
