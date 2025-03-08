@@ -247,3 +247,10 @@ print(f"\n Predicted Medicare Spending & Utilization for {state_name}:")
 pd.set_option('display.max_columns', None)
 pd.set_option('display.width', None)
 print(predicted_df)
+
+torch.save(final_rbm, 'final_rbm.pth')
+import pickle
+with open('scaler.pkl', 'wb') as f:
+    pickle.dump(scaler, f)
+with open('svd.pkl', 'wb') as f:
+    pickle.dump(svd, f)
