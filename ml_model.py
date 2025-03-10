@@ -4,9 +4,23 @@ import pandas as pd
 from sklearn.preprocessing import StandardScaler
 from sklearn.decomposition import TruncatedSVD
 import pickle
+from models import HybridRBM_SVD
+
+# Define hyperparameters used during training
+n_components = 4
+num_hidden_1 = 50
+num_hidden_2 = 30
+num_latent = 10
 
 def load_trained_objects():
-    final_rbm = torch.load('final_rbm.pth', weights_only=False)
+    # Create an instance of the model with the same architecture as used in training.
+    # (Ensure you use the same hyperparameters here.)
+    final_rbm = HybridRBM_SVD(num_visible=n_components,  # from your SVD settings
+                              num_hidden_1=num_hidden_1,
+                              num_hidden_2=num_hidden_2,
+                              num_latent=num_latent)
+    final_rbm.load_state_dict(torch.load('final_rbm.pth'))
+    
     with open('scaler.pkl', 'rb') as f:
         scaler = pickle.load(f)
     with open('svd.pkl', 'rb') as f:
