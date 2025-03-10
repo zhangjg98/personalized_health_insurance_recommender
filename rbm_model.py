@@ -220,7 +220,7 @@ for epoch in range(epochs):
 
 # For prediction, we need to transform the sample data with the same scaler and SVD.
 
-state_name = "NC"
+state_name = "CA"
 numeric_aggregated_state = user_item_matrix.loc[state_name].to_frame().T
 
 # Scale the sample using the same scaler
@@ -248,7 +248,7 @@ pd.set_option('display.max_columns', None)
 pd.set_option('display.width', None)
 print(predicted_df)
 
-torch.save(final_rbm, 'final_rbm.pth')
+torch.save(final_rbm.state_dict(), 'final_rbm.pth')
 import pickle
 with open('scaler.pkl', 'wb') as f:
     pickle.dump(scaler, f)
