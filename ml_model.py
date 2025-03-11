@@ -7,10 +7,10 @@ import pickle
 from models import HybridRBM_SVD
 
 # Define hyperparameters used during training
-n_components = 4
+n_components = 9
 num_hidden_1 = 50
 num_hidden_2 = 30
-num_latent = 10
+num_latent = 20
 
 def load_trained_objects():
     # Create an instance of the model with the same architecture as used in training.
