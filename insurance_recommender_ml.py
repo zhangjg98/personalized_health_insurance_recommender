@@ -1,7 +1,7 @@
 from flask import Flask, render_template, request
 from insurance_recommender import recommend_plan
 from ml_model import predict_medicare_spending
-from models import HybridRBM_SVD
+from models import DeepAutoencoder
 
 app = Flask(__name__)
 
@@ -27,8 +27,8 @@ def recommend():
             ml_prediction_df = predict_medicare_spending(state)
             # For example, get the predicted per capita spending
             spending = ml_prediction_df['TOT_MDCR_STDZD_PYMT_PC'].iloc[0]
-            # Define a threshold (this is arbitrary; adjust based on domain knowledge)
-            spending_threshold = 50000  # adjust this threshold based on your original scale
+            # Define a threshold (this is arbitrary; will adjust later)
+            spending_threshold = 50000
             
             # Adjust the rule-based recommendation if spending is high
             if spending > spending_threshold:
