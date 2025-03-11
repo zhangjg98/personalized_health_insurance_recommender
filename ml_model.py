@@ -4,26 +4,27 @@ import pandas as pd
 from sklearn.preprocessing import StandardScaler
 from sklearn.decomposition import TruncatedSVD
 import pickle
-from models import HybridRBM_SVD
+from models import DeepAutoencoder
 
 # Define hyperparameters used during training
 n_components = 9
-num_hidden_1 = 50
-num_hidden_2 = 30
-num_latent = 20
+num_hidden_1 = 200
+num_hidden_2 = 100
+num_hidden_3 = 50
+num_latent = 25
 
 def load_trained_objects():
-    # Create an instance of the model with the same architecture as used in training.
-    # (Ensure you use the same hyperparameters here.)
-    final_rbm = HybridRBM_SVD(num_visible=n_components,  # from your SVD settings
-                              num_hidden_1=num_hidden_1,
-                              num_hidden_2=num_hidden_2,
-                              num_latent=num_latent)
-    final_rbm.load_state_dict(torch.load('final_rbm.pth'))
+    # Create an instance of the model with the same architecture as used in training
+    final_rbm = DeepAutoencoder(num_visible=n_components,
+                                num_hidden_1=num_hidden_1,
+                                num_hidden_2=num_hidden_2,
+                                num_hidden_3=num_hidden_3,
+                                num_latent=num_latent)
+    final_rbm.load_state_dict(torch.load('final_autoencoder.pth'))
     
     with open('scaler.pkl', 'rb') as f:
         scaler = pickle.load(f)
-    with open('svd.pkl', 'rb') as f:
+    with open('pca.pkl', 'rb') as f:
         svd = pickle.load(f)
     return final_rbm, scaler, svd
 
@@ -38,10 +39,13 @@ def predict_medicare_spending(state_name):
     Finally, it inverses both transformations to return predictions in the original scale.
     """
     # Load original data (for column names and later inverse transformation)
-    user_item_matrix = pd.read_csv('processed_user_item_matrix.csv', index_col=0)
+    user_item_matrix = pd.read_csv('processed_user_item_matrix_state_year.csv', index_col=0)
     
-    # Get the row for the given state
-    numeric_aggregated_state = user_item_matrix.loc[state_name].to_frame().T
+    # Ensure the dataset is sorted by YEAR in case it's not already
+    user_item_matrix = user_item_matrix.sort_values(by="YEAR", ascending=False)
+
+    # Select the latest year's data for the given state
+    numeric_aggregated_state = user_item_matrix.loc[user_item_matrix.index.get_level_values('BENE_GEO_DESC') == state_name].iloc[0:1]
     
     # Scale using the saved scaler
     sample_scaled = SCALER.transform(numeric_aggregated_state)
