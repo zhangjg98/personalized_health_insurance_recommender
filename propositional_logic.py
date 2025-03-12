@@ -1,6 +1,4 @@
-from flask import Flask, render_template, request
-
-app = Flask(__name__)
+# Description: This file contains the propositinoal logic for the insurance recommender system.
 
 # Recommendation function
 def recommend_plan(user_input):
@@ -146,17 +144,3 @@ def recommend_plan(user_input):
         "plan": "Plan Recommendation: Contact a representative for personalized advice",
         "justification": "Based on the information provided, a representative is more likely to help you identify the most suitable plan for you."
     }    
-    
-# Routes
-@app.route('/')
-def home():
-    return render_template('index.html')
-
-@app.route('/recommend', methods=['POST'])
-def recommend():
-    user_input = request.form
-    recommendation = recommend_plan(user_input)
-    return render_template('result.html', recommendation=recommendation)
-
-if __name__ == '__main__':
-    app.run(debug=True)
