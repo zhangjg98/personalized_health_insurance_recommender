@@ -15,7 +15,7 @@ fi
 source venv/bin/activate  # Activate virtual environment (Mac/Linux)
 
 # Check if Flask app file exists
-if [ ! -f "insurance_recommender_ml.py" ]; then
+if [ ! -f "flask_backend.py" ]; then
     echo "Flask app file not found!"
     exit 1
 fi
