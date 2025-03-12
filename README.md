@@ -24,7 +24,7 @@ Make sure that you have downloaded the file `insurance_recommender_ml.py` along 
 
 Running this program requires Python and Flask. If you do not have Flask downloaded on your system, you should download the `requirements.txt` file and use the command `pip install -r requirements.txt` to download the necessary libraries to run this program.
 
-Use the command `python3 insurance_recommender.py` to compile the code. The python command might vary depending on what version of Python is installed. You should then open a web browser and navigate to `http://127.0.0.1:5000`. Once that page has loaded, you should be able to use the Personalized Health Insurance Recommender.
+Use the command `python3 insurance_recommender_ml.py` to compile the code. The python command might vary depending on what version of Python is installed. You should then open a web browser and navigate to `http://127.0.0.1:5000`. Once that page has loaded, you should be able to use the Personalized Health Insurance Recommender.
 
 ### Future Improvements
 
