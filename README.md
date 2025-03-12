@@ -20,7 +20,7 @@ Each recommendation includes a justification to explain its reasoning, ensuring 
 
 ## How to Run the Code
 
-Make sure that you have downloaded the file `insurance_recommender.py` along with the templates folder that contains the `index.html` and `result.html` files.
+Make sure that you have downloaded the file `insurance_recommender_ml.py` along with the templates folder that contains the `index.html` and `result.html` files.
 
 Running this program requires Python and Flask. If you do not have Flask downloaded on your system, you should download the `requirements.txt` file and use the command `pip install -r requirements.txt` to download the necessary libraries to run this program.
 
