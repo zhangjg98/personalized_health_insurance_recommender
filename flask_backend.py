@@ -1,74 +1,79 @@
-from flask import Flask, request, jsonify
+from flask import Flask, render_template, request
 from propositional_logic import recommend_plan
 from ml_model import predict_medicare_spending
-from flask_cors import CORS
 
 app = Flask(__name__)
-CORS(app)  # Allow cross-origin requests from React
 
-# Define friendly names mapping
+# Mapping of technical names to friendly names (only for key variables)
 friendly_names = {
-        'TOT_MDCR_STDZD_PYMT_PC': "Standardized Medicare Payment per Capita",
-        'TOT_MDCR_PYMT_PC': "Actual Medicare Payment per Capita",
-        'BENE_AVG_RISK_SCRE': "Average Health Risk Score",
-        'IP_CVRD_STAYS_PER_1000_BENES': "Inpatient Stay Rate (per 1,000 beneficiaries)",
-        'ER_VISITS_PER_1000_BENES': "Emergency Department Visit Rate (per 1,000 beneficiaries)",
-        'MA_PRTCPTN_RATE': "Medicare Advantage Participation Rate",
-        'BENE_DUAL_PCT': "Medicaid Eligibility Percentage",
-        'BENES_TOTAL_CNT': "Total Beneficiaries",
-        'BENES_FFS_CNT': "Fee-for-Service Beneficiaries",
-        'BENE_FEML_PCT': "Percent Female",
-        'BENE_MALE_PCT': "Percent Male",
-        'BENE_RACE_WHT_PCT': "Percent Non-Hispanic White",
-        'BENE_RACE_BLACK_PCT': "Percent African American",
-        'BENE_RACE_HSPNC_PCT': "Percent Hispanic"
-    }
+    'TOT_MDCR_STDZD_PYMT_PC': "Standardized Medicare Payment per Capita",
+    'BENE_AVG_RISK_SCRE': "Average Health Risk Score",
+    'ER_VISITS_PER_1000_BENES': "Emergency Department Visit Rate (per 1,000 beneficiaries)"
+}
 
-@app.route('/api/recommend', methods=['POST'])
+@app.route('/')
+def home():
+    return render_template('index.html')
+
+@app.route('/recommend', methods=['POST'])
 def recommend():
-    # Expect JSON input from React
-    data = request.get_json()
+    user_input = request.form
+    rule_recommendation = recommend_plan(user_input)
+    state = user_input.get('state', '').strip()
     
-    # Assume data is a dict with keys like age, smoker, state, etc.
-    rule_recommendation = recommend_plan(data)
-    state = data.get('state', '').strip()
-    
+    ml_output_text = ""
     ml_summary = ""
-    ml_data = {}
     
     if state:
         try:
+            # Get ML predictions
             ml_prediction_df = predict_medicare_spending(state)
-            # Rename columns to friendly names for a user‑friendly response
+            # Rename columns
             ml_prediction_df = ml_prediction_df.rename(columns=friendly_names)
             
-            # Extract key metrics (adjust as needed)
+            # Extract key metrics
             spending = ml_prediction_df["Standardized Medicare Payment per Capita"].iloc[0]
-            risk_score = ml_prediction_df["Average Health Risk Score"].iloc[0]
-            spending_threshold = 50000
-            if spending > spending_threshold:
-                rule_recommendation["plan"] += " (Given high state-level spending, consider comprehensive coverage.)"
-                spending_comment = "high spending levels"
-            else:
-                rule_recommendation["plan"] += " (State-level spending appears moderate.)"
-                spending_comment = "moderate spending levels"
-            risk_comment = "a higher-than-average risk profile" if risk_score > 1.0 else "an average risk profile"
+            risk = ml_prediction_df["Average Health Risk Score"].iloc[0]
+            er_rate = ml_prediction_df["Emergency Department Visit Rate (per 1,000 beneficiaries)"].iloc[0]
             
-            ml_summary = (f"The state shows {spending_comment} with a risk profile of {risk_score:.2f}.")
-            # Convert DataFrame to dictionary for JSON response
-            ml_data = ml_prediction_df.to_dict(orient='records')[0]
+            # Build a summary based on thresholds (adjust thresholds as needed)
+            if spending > 50000:
+                spending_text = "high spending"
+                rule_recommendation["plan"] += " (Given high spending, consider comprehensive coverage.)"
+            else:
+                spending_text = "moderate spending"
+                rule_recommendation["plan"] += " (Spending levels appear moderate.)"
+            
+            if risk > 1.0:
+                risk_text = "a higher-than-average risk profile"
+            else:
+                risk_text = "an average risk profile"
+            
+            if er_rate > 800:  # example threshold, adjust accordingly
+                er_text = "a high rate of emergency visits"
+            else:
+                er_text = "a moderate rate of emergency visits"
+            
+            ml_summary = (
+                f"State-level analysis indicates {spending_text}, with {risk_text} and {er_text}. "
+                "These factors suggest that you should consider plans that offer a balance of cost efficiency "
+                "and comprehensive benefits."
+            )
+            
+            # Optionally, if you want to show a table, limit to key metrics:
+            key_metrics_df = ml_prediction_df[["Standardized Medicare Payment per Capita",
+                                               "Average Health Risk Score",
+                                               "Emergency Department Visit Rate (per 1,000 beneficiaries)"]]
+            ml_output_text = key_metrics_df.to_html(classes='table table-striped')
         except Exception as e:
-            ml_summary = f"Error in ML prediction: {str(e)}"
+            ml_output_text = f"Error in generating ML prediction: {str(e)}"
     else:
-        ml_summary = "No state was selected; state-level insights are unavailable."
+        ml_output_text = "No state was selected; state-level insights are unavailable."
     
-    # Build the final response as JSON
-    response = {
-        "rule_recommendation": rule_recommendation,
-        "ml_summary": ml_summary,
-        "ml_data": ml_data
-    }
-    return jsonify(response)
+    return render_template('result.html', 
+                           recommendation=rule_recommendation, 
+                           ml_prediction=ml_output_text,
+                           ml_summary=ml_summary)
 
 if __name__ == '__main__':
     app.run(debug=True)
