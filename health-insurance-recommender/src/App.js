@@ -1,10 +1,16 @@
 import React, { useState } from "react";
+import ReactTooltip from "react-tooltip";
 
 function App() {
   const [formData, setFormData] = useState({
     state: "",
     age: "",
     smoker: "",
+    bmi: "",
+    income: "",
+    family_size: "",
+    chronic_condition: "",
+    medical_care_frequency: "",
   });
 
   const [recommendation, setRecommendation] = useState(null);
@@ -41,6 +47,25 @@ function App() {
       setError(err.message);
     }
   };
+
+  // Define key metrics and tooltips
+  const metricsInfo = [
+    {
+      key: "Standardized Medicare Payment per Capita",
+      tooltip:
+        "The average cost per beneficiary after adjusting for regional differences.",
+    },
+    {
+      key: "Average Health Risk Score",
+      tooltip:
+        "A score representing the overall health risk of the state's Medicare population. Higher scores mean higher expected healthcare needs.",
+    },
+    {
+      key: "Emergency Department Visit Rate (per 1,000 beneficiaries)",
+      tooltip:
+        "The estimated number of emergency department visits per 1,000 beneficiaries, indicating urgent care utilization.",
+    },
+  ];
 
   return (
     <div className="App">
@@ -184,13 +209,15 @@ function App() {
         <button type="submit">Get Recommendation</button>
       </form>
 
-      {error && <p style={{color: 'red'}}>{error}</p>}
+      {error && <p style={{ color: "red" }}>{error}</p>}
 
       {recommendation && (
         <div>
           <h2>Recommended Plan</h2>
           <p>{recommendation.plan}</p>
-          <p><em>{recommendation.justification}</em></p>
+          <p>
+            <em>{recommendation.justification}</em>
+          </p>
         </div>
       )}
 
@@ -205,12 +232,15 @@ function App() {
         <div>
           <h3>Predicted Medicare Spending Details</h3>
           <ul>
-            {Object.entries(mlData).map(([key, value]) => (
-              <li key={key}>
-                <strong>{key}:</strong> {value}
+            {metricsInfo.map((item) => (
+              <li key={item.key}>
+                <span data-tip={item.tooltip} data-for="tooltip">
+                  <strong>{item.key}:</strong> {mlData[item.key]}
+                </span>
               </li>
             ))}
           </ul>
+          <ReactTooltip id="tooltip" place="right" type="dark" effect="solid" />
         </div>
       )}
     </div>
