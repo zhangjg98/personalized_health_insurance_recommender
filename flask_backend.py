@@ -11,12 +11,24 @@ CORS(app)
 # Define a mapping from technical to friendly names (for key metrics)
 friendly_names = {
     'TOT_MDCR_STDZD_PYMT_PC': "Standardized Medicare Payment per Capita",
+    'TOT_MDCR_PYMT_PC': "Actual Medicare Payment per Capita",
     'BENE_AVG_RISK_SCRE': "Average Health Risk Score",
-    'ER_VISITS_PER_1000_BENES': "Emergency Department Visit Rate (per 1,000 beneficiaries)"
+    'IP_CVRD_STAYS_PER_1000_BENES': "Inpatient Stay Rate (per 1,000 beneficiaries)", 
+    'ER_VISITS_PER_1000_BENES': "Emergency Department Visit Rate (per 1,000 beneficiaries)",
+    'MA_PRTCPTN_RATE': "Medicare Advantage Participation Rate",
+    'BENE_DUAL_PCT': "Medicaid Eligibility Percentage",
 }
 
 # Compute dynamic thresholds from the processed CSV
-keys_for_thresholds = ["TOT_MDCR_STDZD_PYMT_PC", "BENE_AVG_RISK_SCRE", "ER_VISITS_PER_1000_BENES"]
+keys_for_thresholds = [
+    "TOT_MDCR_STDZD_PYMT_PC", 
+    "TOT_MDCR_PYMT_PC",
+    "BENE_AVG_RISK_SCRE", 
+    "IP_CVRD_STAYS_PER_1000_BENES",
+    "ER_VISITS_PER_1000_BENES",
+    "MA_PRTCPTN_RATE",
+    'BENE_DUAL_PCT'
+]
 dynamic_thresholds = unified_thresholds("processed_user_item_matrix.csv", keys_for_thresholds)
 
 # Load the summary of states with multiple "High" or "Low" classifications
@@ -25,6 +37,20 @@ state_summary = pd.read_csv("state_summary.csv")
 @app.route('/')
 def home():
     return render_template('index.html')
+
+def classify_value(value, thresholds):
+    """
+    Classify a value as 'Low', 'Moderate', or 'High' based on thresholds.
+    """
+    low, high = thresholds["low"], thresholds["high"]
+    mid = (low + high) / 2  # Calculate the midpoint
+    if value < low:
+        return "Low"
+    elif value > high:
+        return "High"
+    elif abs(value - mid) <= (high - low) * 0.25:  # Stricter "Moderate" range
+        return "Moderate"
+    return "Low" if value < mid else "High"
 
 @app.route('/recommend', methods=['POST'])
 def recommend():
@@ -49,48 +75,54 @@ def recommend():
                 "outlier_message": "",
             })
 
+        # Load raw values from processed_user_item_matrix.csv
+        raw_data = pd.read_csv("processed_user_item_matrix.csv", index_col=0)
+        if state not in raw_data.index:
+            return jsonify({
+                "recommendation": rule_recommendation,
+                "ml_prediction": ml_output_json,
+                "ml_summary": f"No data available for state: {state}.",
+                "outlier_message": "",
+            })
+
+        state_data = raw_data.loc[state]
+        print(f"Raw data for {state}:\n{state_data}")  # Debugging log
+
+        # Classify raw values for outlier information
+        classifications = {}
+        for key, friendly_name in friendly_names.items():
+            if key in dynamic_thresholds and key in state_data:
+                value = state_data[key]
+                classification = classify_value(value, dynamic_thresholds[key])
+                classifications[friendly_name] = classification
+                print(f"Processing {friendly_name}: Value={value}, Classification={classification}")  # Debugging log
+
         # Generate ML predictions
         ml_prediction_df = predict_medicare_spending(state)
         print("ML Prediction DataFrame:\n", ml_prediction_df)  # Debugging log
         ml_prediction_df = ml_prediction_df.rename(columns=friendly_names)
-        
-        # Extract key metrics
+
+        # Convert ML predictions to JSON for frontend display
+        ml_output_json = ml_prediction_df.to_dict(orient="records")
+
+        # Build summary messages based on ML predictions
         spending = ml_prediction_df["Standardized Medicare Payment per Capita"].iloc[0]
         risk = ml_prediction_df["Average Health Risk Score"].iloc[0]
         er_rate = ml_prediction_df["Emergency Department Visit Rate (per 1,000 beneficiaries)"].iloc[0]
-        
-        # Use dynamic thresholds (computed earlier)
-        spending_thresholds = dynamic_thresholds["TOT_MDCR_STDZD_PYMT_PC"]
-        risk_thresholds = dynamic_thresholds["BENE_AVG_RISK_SCRE"]
-        er_thresholds = dynamic_thresholds["ER_VISITS_PER_1000_BENES"]
-        
-        # Classify metrics
-        spending_classification = (
-            "High" if spending > spending_thresholds["high"] else
-            "Low" if spending < spending_thresholds["low"] else
-            "Moderate"
-        )
-        risk_classification = (
-            "High" if risk > risk_thresholds["high"] else
-            "Low" if risk < risk_thresholds["low"] else
-            "Moderate"
-        )
-        er_rate_classification = (
-            "High" if er_rate > er_thresholds["high"] else
-            "Low" if er_rate < er_thresholds["low"] else
-            "Moderate"
-        )
-        
-        # Build summary messages
+
+        spending_classification = classify_value(spending, dynamic_thresholds["TOT_MDCR_STDZD_PYMT_PC"])
+        risk_classification = classify_value(risk, dynamic_thresholds["BENE_AVG_RISK_SCRE"])
+        er_rate_classification = classify_value(er_rate, dynamic_thresholds["ER_VISITS_PER_1000_BENES"])
+
         if spending_classification == "High":
             spending_text = "high spending"
-            rule_recommendation["plan"] += " (Given high spending, consider comprehensive coverage.)"
+            rule_recommendation["plan"] += " (Given high state spending, consider comprehensive coverage.)"
         elif spending_classification == "Low":
             spending_text = "low spending"
-            rule_recommendation["plan"] += " (Given low spending, consider plans with lower premiums.)"
+            rule_recommendation["plan"] += " (Given low state spending, consider plans with lower premiums.)"
         else:
             spending_text = "moderate spending"
-            rule_recommendation["plan"] += " (Spending levels appear moderate.)"
+            rule_recommendation["plan"] += " (State spending levels appear moderate.)"
         
         if risk_classification == "High":
             risk_text = "a higher-than-average risk profile"
@@ -111,22 +143,23 @@ def recommend():
             "These factors suggest that you should consider plans that balance cost and benefits accordingly."
         )
         
-        # Check for outlier information
+        # Generate outlier information based on raw data
         outlier_row = state_summary[state_summary["State"] == state]
         if not outlier_row.empty:
             high_count = outlier_row["High Count"].iloc[0]
             low_count = outlier_row["Low Count"].iloc[0]
-            outlier_message = (
-                f"Note: {state} has {high_count} 'High' classifications and {low_count} 'Low' classifications."
-            )
-        
-        # Convert predictions to JSON
-        key_metrics_df = ml_prediction_df[[
-            "Standardized Medicare Payment per Capita",
-            "Average Health Risk Score",
-            "Emergency Department Visit Rate (per 1,000 beneficiaries)"
-        ]]
-        ml_output_json = key_metrics_df.to_dict(orient="records")
+            
+            # Identify specific metrics classified as "High" or "Low"
+            high_metrics = [k for k, v in classifications.items() if v == "High"]
+            low_metrics = [k for k, v in classifications.items() if v == "Low"]
+
+            # Construct a detailed outlier message
+            outlier_message = f"Note: {state} has {high_count} 'High' classifications and {low_count} 'Low' classifications. "
+            if high_metrics:
+                outlier_message += f"Metrics classified as 'High': {', '.join(high_metrics)}. "
+            if low_metrics:
+                outlier_message += f"Metrics classified as 'Low': {', '.join(low_metrics)}."
+            print(f"Outlier message for {state}: {outlier_message}")  # Debugging log
 
     except Exception as e:
         # Handle exceptions gracefully
