@@ -35,7 +35,15 @@ FINAL_RBM, SCALER, PCA_MODEL = load_trained_objects()
 # Load thresholds dynamically
 THRESHOLDS = unified_thresholds(
     "processed_user_item_matrix.csv",
-    keys=["TOT_MDCR_STDZD_PYMT_PC", "TOT_MDCR_PYMT_PC", "BENE_AVG_RISK_SCRE"]
+    keys=[
+        "TOT_MDCR_STDZD_PYMT_PC", 
+        "TOT_MDCR_PYMT_PC", 
+        "BENE_AVG_RISK_SCRE", 
+        "IP_CVRD_STAYS_PER_1000_BENES", 
+        "ER_VISITS_PER_1000_BENES", 
+        "MA_PRTCPTN_RATE",
+        'BENE_DUAL_PCT'
+    ]
 )
 
 def classify_spending(value, key):
@@ -93,13 +101,13 @@ def predict_medicare_spending(state_name):
         'ER_VISITS_PER_1000_BENES': "Emergency Department Visit Rate (per 1,000 beneficiaries)",
         'MA_PRTCPTN_RATE': "Medicare Advantage Participation Rate",
         'BENE_DUAL_PCT': "Medicaid Eligibility Percentage",
-        'BENES_TOTAL_CNT': "Total Beneficiaries",
-        'BENES_FFS_CNT': "Fee-for-Service Beneficiaries",
-        'BENE_FEML_PCT': "Percent Female",
-        'BENE_MALE_PCT': "Percent Male",
-        'BENE_RACE_WHT_PCT': "Percent Non-Hispanic White",
-        'BENE_RACE_BLACK_PCT': "Percent African American",
-        'BENE_RACE_HSPNC_PCT': "Percent Hispanic"
+        # 'BENES_TOTAL_CNT': "Total Beneficiaries",
+        # 'BENES_FFS_CNT': "Fee-for-Service Beneficiaries",
+        # 'BENE_FEML_PCT': "Percent Female",
+        # 'BENE_MALE_PCT': "Percent Male",
+        # 'BENE_RACE_WHT_PCT': "Percent Non-Hispanic White",
+        # 'BENE_RACE_BLACK_PCT': "Percent African American",
+        # 'BENE_RACE_HSPNC_PCT': "Percent Hispanic"
     }
 
     # Convert to DataFrame with original column names
