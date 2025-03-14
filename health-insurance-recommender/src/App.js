@@ -4,13 +4,13 @@ import ReactTooltip from "react-tooltip";
 function App() {
   const [formData, setFormData] = useState({
     state: "",
-    age: "",
-    smoker: "",
+    age: "young_adult",
+    smoker: "no",
     bmi: "",
     income: "",
     family_size: "",
-    chronic_condition: "",
-    medical_care_frequency: "",
+    chronic_condition: "no",
+    medical_care_frequency: "Low",
   });
 
   const [recommendation, setRecommendation] = useState(null);
@@ -28,7 +28,9 @@ function App() {
     setError("");
 
     try {
-      const response = await fetch("/api/recommend", {
+      console.log("Submitting form data:", formData); // Debugging log
+
+      const response = await fetch("/recommend", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -41,10 +43,13 @@ function App() {
       }
 
       const data = await response.json();
-      setRecommendation(data.rule_recommendation);
+      console.log("Response from backend:", data); // Debugging log
+
+      setRecommendation(data.recommendation);
       setMlSummary(data.ml_summary);
-      setMlData(data.ml_data);
+      setMlData(data.ml_prediction);
     } catch (err) {
+      console.error("Error during form submission:", err); // Debugging log
       setError(err.message);
     }
   };
@@ -70,6 +75,9 @@ function App() {
 
   useEffect(() => {
     ReactTooltip.rebuild(); // Reinitialize tooltips on component update
+
+    // Debugging: Log the mlData object to verify its structure
+    console.log("ML Data:", mlData);
   }, [mlData]);
 
   return (
@@ -233,30 +241,34 @@ function App() {
         </div>
       )}
 
-      {mlData && (
+      {mlData && mlData.length > 0 && (
         <div>
           <h3>Predicted Medicare Spending Details</h3>
           <ul>
-            {metricsInfo.map((item) => (
-              <li key={item.key}>
-                <span
-                  style={{
-                    textDecoration: "underline dotted",
-                    cursor: "help",
-                  }}
-                  data-tip={item.tooltip}
-                  data-for="tooltip"
-                  onMouseEnter={() => showTooltip(true)}
-                  onMouseLeave={() => {
-                    showTooltip(false);
-                    setTimeout(() => showTooltip(true), 50);
-                  }}
-                >
-                  <strong>{item.key}:</strong>
-                </span>{" "}
-                {mlData[item.key]}
-              </li>
-            ))}
+            {metricsInfo.map((item) => {
+              const metricValue = mlData[0][item.key];
+
+              return (
+                <li key={item.key}>
+                  <span
+                    style={{
+                      textDecoration: "underline dotted",
+                      cursor: "help",
+                    }}
+                    data-tip={item.tooltip}
+                    data-for="tooltip"
+                    onMouseEnter={() => showTooltip(true)}
+                    onMouseLeave={() => {
+                      showTooltip(false);
+                      setTimeout(() => showTooltip(true), 50);
+                    }}
+                  >
+                    <strong>{item.key}:</strong>
+                  </span>{" "}
+                  {metricValue !== undefined ? metricValue.toFixed(4) : "N/A"}
+                </li>
+              );
+            })}
           </ul>
           {tooltip && (
             <ReactTooltip
@@ -267,8 +279,8 @@ function App() {
               delayHide={100}
             />
           )}
-        </div>
-      )}
+  </div>
+)}
     </div>
   );
 }
