@@ -20,7 +20,7 @@ if [ ! -f "flask_backend.py" ]; then
     exit 1
 fi
 
-export FLASK_APP=insurance_recommender_ml.py
+export FLASK_APP=flask_backend.py
 flask run --port=5000 &  # Run in the background
 
 # Start React frontend
