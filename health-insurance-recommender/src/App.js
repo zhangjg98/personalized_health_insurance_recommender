@@ -16,6 +16,7 @@ function App() {
   const [recommendation, setRecommendation] = useState(null);
   const [mlSummary, setMlSummary] = useState("");
   const [mlData, setMlData] = useState(null);
+  const [outlierMessage, setOutlierMessage] = useState(""); // State for outlier message
   const [error, setError] = useState("");
   const [tooltip, showTooltip] = useState(true); // Tooltip visibility state
 
@@ -48,6 +49,7 @@ function App() {
       setRecommendation(data.recommendation);
       setMlSummary(data.ml_summary);
       setMlData(data.ml_prediction);
+      setOutlierMessage(data.outlier_message || ""); // Set the outlier message
     } catch (err) {
       console.error("Error during form submission:", err); // Debugging log
       setError(err.message);
@@ -279,8 +281,16 @@ function App() {
               delayHide={100}
             />
           )}
-  </div>
-)}
+        </div>
+      )}
+
+      {/* Display outlier message */}
+      {outlierMessage && (
+        <div>
+          <h3>Outlier Information</h3>
+          <p>{outlierMessage}</p>
+        </div>
+      )}
     </div>
   );
 }
