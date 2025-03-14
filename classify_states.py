@@ -6,9 +6,17 @@ csv_path = "processed_user_item_matrix.csv"
 df = pd.read_csv(csv_path, index_col=0)
 
 # Define the keys for classification
-keys = ["TOT_MDCR_STDZD_PYMT_PC", "BENE_AVG_RISK_SCRE", "ER_VISITS_PER_1000_BENES"]
+keys = [
+    "TOT_MDCR_STDZD_PYMT_PC", 
+    "TOT_MDCR_PYMT_PC",
+    "BENE_AVG_RISK_SCRE", 
+    "IP_CVRD_STAYS_PER_1000_BENES",
+    "ER_VISITS_PER_1000_BENES",
+    "MA_PRTCPTN_RATE",
+    'BENE_DUAL_PCT'
+]
 
-# Compute thresholds
+# Compute thresholds dynamically using the same function as the backend
 thresholds = unified_thresholds(csv_path, keys)
 
 def classify_value(value, key):
@@ -19,6 +27,10 @@ def classify_value(value, key):
         return "Unknown"
     low, high = thresholds[key]["low"], thresholds[key]["high"]
     mid = (low + high) / 2  # Calculate the midpoint
+
+    # Debugging logs
+    print(f"Classifying value: {value} for key: {key} with thresholds: low={low}, high={high}, mid={mid}")
+
     if value < low:
         return "Low"
     elif value > high:
@@ -33,7 +45,10 @@ for state, row in df.iterrows():
     state_classification = {"State": state}
     for key in keys:
         if key in row:
-            state_classification[key] = classify_value(row[key], key)
+            value = row[key]
+            classification = classify_value(value, key)
+            print(f"Processing {state} - {key}: Value={value}, Classification={classification}")  # Debugging log
+            state_classification[key] = classification
     classification_results.append(state_classification)
 
 # Convert results to a DataFrame
