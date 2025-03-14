@@ -21,10 +21,23 @@ if [ ! -f "flask_backend.py" ]; then
 fi
 
 export FLASK_APP=flask_backend.py
-flask run --port=5000 &  # Run in the background
+
+# Start Flask in the background and save its PID
+flask run --port=5000 &
+FLASK_PID=$!
+
+# Function to clean up Flask process on exit
+cleanup() {
+    echo "Stopping Flask..."
+    kill $FLASK_PID
+    wait $FLASK_PID 2>/dev/null
+    echo "Flask stopped."
+}
+
+# Set trap to call cleanup on script exit (e.g., Ctrl+C)
+trap cleanup EXIT
 
 # Start React frontend
-
 cd health-insurance-recommender  # Change to React directory
 
 # Check if package.json exists
