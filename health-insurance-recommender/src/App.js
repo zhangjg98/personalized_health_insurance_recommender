@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import ReactTooltip from "react-tooltip";
 
 function App() {
@@ -17,6 +17,7 @@ function App() {
   const [mlSummary, setMlSummary] = useState("");
   const [mlData, setMlData] = useState(null);
   const [error, setError] = useState("");
+  const [tooltip, showTooltip] = useState(true); // Tooltip visibility state
 
   const handleChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
@@ -66,6 +67,10 @@ function App() {
         "The estimated number of emergency department visits per 1,000 beneficiaries, indicating urgent care utilization.",
     },
   ];
+
+  useEffect(() => {
+    ReactTooltip.rebuild(); // Reinitialize tooltips on component update
+  }, [mlData]);
 
   return (
     <div className="App">
@@ -234,13 +239,34 @@ function App() {
           <ul>
             {metricsInfo.map((item) => (
               <li key={item.key}>
-                <span data-tip={item.tooltip} data-for="tooltip">
-                  <strong>{item.key}:</strong> {mlData[item.key]}
-                </span>
+                <span
+                  style={{
+                    textDecoration: "underline dotted",
+                    cursor: "help",
+                  }}
+                  data-tip={item.tooltip}
+                  data-for="tooltip"
+                  onMouseEnter={() => showTooltip(true)}
+                  onMouseLeave={() => {
+                    showTooltip(false);
+                    setTimeout(() => showTooltip(true), 50);
+                  }}
+                >
+                  <strong>{item.key}:</strong>
+                </span>{" "}
+                {mlData[item.key]}
               </li>
             ))}
           </ul>
-          <ReactTooltip id="tooltip" place="right" type="dark" effect="solid" />
+          {tooltip && (
+            <ReactTooltip
+              id="tooltip"
+              place="right"
+              type="dark"
+              effect="solid"
+              delayHide={100}
+            />
+          )}
         </div>
       )}
     </div>
