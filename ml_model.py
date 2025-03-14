@@ -5,6 +5,7 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.decomposition import PCA  # using PCA instead of SVD
 import pickle
 from models import DeepAutoencoder
+from thresholds import unified_thresholds
 
 # Define hyperparameters used during training
 n_components = 9
@@ -31,6 +32,25 @@ def load_trained_objects():
 # Load the objects once when the module is imported
 FINAL_RBM, SCALER, PCA_MODEL = load_trained_objects()
 
+# Load thresholds dynamically
+THRESHOLDS = unified_thresholds(
+    "processed_user_item_matrix.csv",
+    keys=["TOT_MDCR_STDZD_PYMT_PC", "TOT_MDCR_PYMT_PC", "BENE_AVG_RISK_SCRE"]
+)
+
+def classify_spending(value, key):
+    """
+    Classify spending level based on dynamic thresholds.
+    """
+    if key not in THRESHOLDS:
+        return "Unknown"
+    thresholds = THRESHOLDS[key]
+    if value < thresholds["low"]:
+        return "Low"
+    elif value > thresholds["high"]:
+        return "High"
+    return "Moderate"
+
 def predict_medicare_spending(state_name):
     """
     Given a state name, this function loads the original processed dataset,
@@ -50,6 +70,7 @@ def predict_medicare_spending(state_name):
     
     # Transform with the saved PCA
     sample_pca = PCA_MODEL.transform(sample_scaled)
+    
     sample_input = torch.tensor(sample_pca, dtype=torch.float32)
     
     # Set the model to evaluation mode and get prediction in PCA space
@@ -60,6 +81,7 @@ def predict_medicare_spending(state_name):
     
     # Inverse transform: first from PCA space back to scaled space...
     reconstructed_scaled = PCA_MODEL.inverse_transform(predicted_pca_np)
+    
     # ... then from scaled space back to the original feature space.
     reconstructed_output = SCALER.inverse_transform(reconstructed_scaled)
 
@@ -83,4 +105,11 @@ def predict_medicare_spending(state_name):
     # Convert to DataFrame with original column names
     predicted_df = pd.DataFrame(reconstructed_output, columns=user_item_matrix.columns)
     predicted_df = predicted_df.rename(columns=friendly_names)
+
+    # Add spending level classifications
+    for key, friendly_name in friendly_names.items():
+        if key in predicted_df.columns:
+            predicted_df[f"{friendly_name} Level"] = predicted_df[friendly_name].apply(
+                lambda x: classify_spending(x, key)
+            )
     return predicted_df
