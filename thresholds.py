@@ -17,6 +17,7 @@ def compute_dynamic_thresholds(csv_path, keys, lower_quantile=0.25, upper_quanti
       dict: A dictionary mapping each key to a dictionary of lower and upper thresholds.
     """
     df = pd.read_csv(csv_path, index_col=0)
+    print("CSV Columns:", df.columns)  # Debugging log
     thresholds = {}
     for key in keys:
         if key in df.columns:
@@ -29,6 +30,11 @@ def compute_dynamic_thresholds(csv_path, keys, lower_quantile=0.25, upper_quanti
                 lower = df[key].quantile(lower_quantile) * scale_factor
                 upper = df[key].quantile(upper_quantile) * scale_factor
             thresholds[key] = {"low": lower, "high": upper}
+
+            # Debugging logs
+            print(f"Computed thresholds for {key}: low={lower}, high={upper}")
+        else:
+            print(f"Key {key} not found in CSV columns!")  # Debugging log
     return thresholds
 
 def unified_thresholds(csv_path, keys):
@@ -45,15 +51,7 @@ if __name__ == "__main__":
         "BENE_AVG_RISK_SCRE", 
         "IP_CVRD_STAYS_PER_1000_BENES",
         "ER_VISITS_PER_1000_BENES",
-        "MA_PRTCPTN_RATE",
-        "BENE_DUAL_PCT",
-        "BENES_TOTAL_CNT",
-        "BENES_FFS_CNT",
-        "BENE_FEML_PCT",
-        "BENE_MALE_PCT",
-        "BENE_RACE_WHT_PCT",
-        "BENE_RACE_BLACK_PCT",
-        "BENE_RACE_HSPNC_PCT"
+        "MA_PRTCPTN_RATE"
     ]
     thresholds = compute_dynamic_thresholds("processed_user_item_matrix.csv", keys, scale_factor=1.3, use_z_score=True)
     print("Dynamic thresholds:", thresholds)
