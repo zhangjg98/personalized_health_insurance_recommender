@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { Container, Form, Button, Card, Row, Col, Alert } from "react-bootstrap";
-import ReactTooltip from "react-tooltip"; // Revert to default export
+import ReactTooltip from "react-tooltip";
 import "bootstrap/dist/css/bootstrap.min.css";
 
 function App() {
@@ -18,12 +18,11 @@ function App() {
   const [recommendation, setRecommendation] = useState(null);
   const [mlSummary, setMlSummary] = useState("");
   const [mlData, setMlData] = useState(null);
-  const [outlierMessage, setOutlierMessage] = useState(""); // State for outlier message
+  const [outlierMessage, setOutlierMessage] = useState("");
   const [error, setError] = useState("");
-  const [tooltip, showTooltip] = useState(true); // State to control tooltip visibility
+  const [tooltip, showTooltip] = useState(true);
 
   const handleChange = (e) => {
-    console.log(`Field changed: ${e.target.name}, New value: ${e.target.value}`); // Debugging log
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
 
@@ -32,8 +31,6 @@ function App() {
     setError("");
 
     try {
-      console.log("Submitting form data:", formData); // Debugging log
-
       const response = await fetch("/recommend", {
         method: "POST",
         headers: {
@@ -47,19 +44,15 @@ function App() {
       }
 
       const data = await response.json();
-      console.log("Response from backend:", data); // Debugging log
-
       setRecommendation(data.recommendation);
       setMlSummary(data.ml_summary);
       setMlData(data.ml_prediction);
-      setOutlierMessage(data.outlier_message || ""); // Set the outlier message
+      setOutlierMessage(data.outlier_message || "");
     } catch (err) {
-      console.error("Error during form submission:", err); // Debugging log
       setError(err.message);
     }
   };
 
-  // Define key metrics and tooltips
   const metricsInfo = [
     {
       key: "Standardized Medicare Payment per Capita",
@@ -78,12 +71,7 @@ function App() {
     },
   ];
 
-  useEffect(() => {
-    console.log("ML Data:", mlData);
-    console.log("Recommendation:", recommendation);
-    console.log("ML Summary:", mlSummary);
-    console.log("Outlier Message:", outlierMessage);
-  }, [mlData, recommendation, mlSummary, outlierMessage]);
+  useEffect(() => {}, [mlData, recommendation, mlSummary, outlierMessage]);
 
   return (
     <Container className="mt-4">
@@ -268,12 +256,12 @@ function App() {
                         textDecoration: "underline dotted",
                         cursor: "help",
                       }}
-                      data-tip={item.tooltip} // Use data-tip for tooltip content
-                      data-for="tooltip" // Use data-for to associate with the tooltip ID
-                      onMouseEnter={() => showTooltip(true)} // Show tooltip on hover
+                      data-tip={item.tooltip}
+                      data-for="tooltip"
+                      onMouseEnter={() => showTooltip(true)}
                       onMouseLeave={() => {
-                        showTooltip(false); // Hide tooltip on hover end
-                        setTimeout(() => showTooltip(true), 50); // Re-enable tooltip after a short delay
+                        showTooltip(false);
+                        setTimeout(() => showTooltip(true), 50);
                       }}
                     >
                       <strong>{item.key}:</strong>
@@ -288,7 +276,6 @@ function App() {
         </Card>
       )}
 
-      {/* Display outlier message */}
       {outlierMessage && (
         <Card className="mt-4">
           <Card.Header>Outlier Information</Card.Header>
