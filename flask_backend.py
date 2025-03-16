@@ -1,12 +1,56 @@
 from flask import Flask, render_template, request, jsonify
+from flask_sqlalchemy import SQLAlchemy
 from flask_cors import CORS
 from propositional_logic import recommend_plan
 from ml_model import predict_medicare_spending
 from thresholds import compute_dynamic_thresholds, unified_thresholds
+from neural_collaborative_filtering import load_ncf_model, predict_user_item_interactions  # Import NCF utilities
 import pandas as pd
 
 app = Flask(__name__)
 CORS(app)
+
+# Configure PostgreSQL database
+app.config['SQLALCHEMY_DATABASE_URI'] = 'postgresql://recommender_user:securepassword@localhost/health_insurance_recommender'
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+
+db = SQLAlchemy(app)
+
+# Define database models
+class User(db.Model):
+    __tablename__ = 'users'
+    id = db.Column(db.Integer, primary_key=True)
+    age_group = db.Column(db.String(50))
+    smoker = db.Column(db.Boolean)
+    bmi_category = db.Column(db.String(50))
+    income = db.Column(db.String(50))
+    family_size = db.Column(db.String(50))
+    chronic_condition = db.Column(db.Boolean)
+    medical_care_frequency = db.Column(db.String(50))
+    preferred_plan_type = db.Column(db.String(50))  # Example of a flexible field
+
+class Item(db.Model):
+    __tablename__ = 'items'
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(255))
+    description = db.Column(db.Text)
+
+class Interaction(db.Model):
+    __tablename__ = 'interactions'
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'))
+    item_id = db.Column(db.Integer, db.ForeignKey('items.id'))
+    rating = db.Column(db.Float)
+    timestamp = db.Column(db.DateTime, default=db.func.current_timestamp())
+
+# Remove the @app.before_first_request decorator
+# @app.before_first_request
+def create_tables():
+    db.create_all()
+
+# Wrap the create_tables() call in an application context
+with app.app_context():
+    create_tables()
 
 # Define a mapping from technical to friendly names (for key metrics)
 friendly_names = {
@@ -33,6 +77,9 @@ dynamic_thresholds = unified_thresholds("processed_user_item_matrix.csv", keys_f
 
 # Load the summary of states with multiple "High" or "Low" classifications
 state_summary = pd.read_csv("state_summary.csv")
+
+# Load the NeuralCollaborativeFiltering model and user-item matrix
+NCF_MODEL, USER_ITEM_MATRIX = load_ncf_model()
 
 @app.route('/')
 def home():
@@ -65,6 +112,7 @@ def recommend():
         ml_output_json = []  # Default to an empty list
         ml_summary = ""
         outlier_message = ""
+        ncf_recommendations = []  # Add NCF recommendations
 
         # Validate input
         if not state:
@@ -73,6 +121,7 @@ def recommend():
                 "ml_prediction": ml_output_json,
                 "ml_summary": "No state provided. Unable to generate state-level analysis.",
                 "outlier_message": "",
+                "ncf_recommendations": ncf_recommendations,  # Include NCF recommendations
             })
 
         # Load raw values from processed_user_item_matrix.csv
@@ -83,6 +132,7 @@ def recommend():
                 "ml_prediction": ml_output_json,
                 "ml_summary": f"No data available for state: {state}.",
                 "outlier_message": "",
+                "ncf_recommendations": ncf_recommendations,  # Include NCF recommendations
             })
 
         state_data = raw_data.loc[state]
@@ -161,18 +211,43 @@ def recommend():
                 outlier_message += f"Metrics classified as 'Low': {', '.join(low_metrics)}."
             print(f"Outlier message for {state}: {outlier_message}")  # Debugging log
 
+        # Generate NeuralCollaborativeFiltering recommendations
+        user_id = int(user_input.get("user_id", -1))  # Assume user_id is passed in the request
+        if 0 <= user_id < USER_ITEM_MATRIX.shape[0]:
+            ncf_recommendations = predict_user_item_interactions(NCF_MODEL, USER_ITEM_MATRIX, user_id)
+        else:
+            print(f"Invalid user_id: {user_id}")  # Debugging log
+
     except Exception as e:
         # Handle exceptions gracefully
         print(f"Error during ML prediction: {e}")
         ml_output_json = [{"error": f"Error in generating ML prediction: {str(e)}"}]
         ml_summary = "An error occurred while generating state-level analysis."
+        ncf_recommendations = []
 
     return jsonify({
         "recommendation": rule_recommendation,
         "ml_prediction": ml_output_json,
         "ml_summary": ml_summary,
         "outlier_message": outlier_message,
+        "ncf_recommendations": ncf_recommendations,  # Include NCF recommendations in the response
     })
+
+@app.route('/register', methods=['POST'])
+def register_user():
+    data = request.json
+    user = User(**data)
+    db.session.add(user)
+    db.session.commit()
+    return jsonify({"message": "User registered successfully", "user_id": user.id})
+
+@app.route('/log_interaction', methods=['POST'])
+def log_interaction():
+    data = request.json
+    interaction = Interaction(**data)
+    db.session.add(interaction)
+    db.session.commit()
+    return jsonify({"message": "Interaction logged successfully"})
 
 if __name__ == '__main__':
     app.run(debug=True)
