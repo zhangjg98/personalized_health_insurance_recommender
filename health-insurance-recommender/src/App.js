@@ -13,12 +13,14 @@ function App() {
     family_size: "",
     chronic_condition: "no",
     medical_care_frequency: "Low",
+    preferred_plan_type: "" // New field
   });
 
   const [recommendation, setRecommendation] = useState(null);
   const [mlSummary, setMlSummary] = useState("");
   const [mlData, setMlData] = useState(null);
   const [outlierMessage, setOutlierMessage] = useState("");
+  const [ncfRecommendations, setNcfRecommendations] = useState([]); // State for NCF recommendations
   const [error, setError] = useState("");
   const [tooltip, showTooltip] = useState(true);
 
@@ -48,8 +50,23 @@ function App() {
       setMlSummary(data.ml_summary);
       setMlData(data.ml_prediction);
       setOutlierMessage(data.outlier_message || "");
+      setNcfRecommendations(data.ncf_recommendations || []); // Set NCF recommendations
     } catch (err) {
       setError(err.message);
+    }
+  };
+
+  const logInteraction = async (itemId, rating) => {
+    try {
+      const response = await fetch('/log_interaction', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ user_id: currentUser.id, item_id: itemId, rating }),
+      });
+      const data = await response.json();
+      console.log(data.message);
+    } catch (err) {
+      console.error('Error logging interaction:', err);
     }
   };
 
@@ -71,7 +88,7 @@ function App() {
     },
   ];
 
-  useEffect(() => {}, [mlData, recommendation, mlSummary, outlierMessage]);
+  useEffect(() => {}, [mlData, recommendation, mlSummary, outlierMessage, ncfRecommendations]);
 
   return (
     <Container className="mt-4">
@@ -216,6 +233,23 @@ function App() {
               </Form.Control>
             </Form.Group>
           </Col>
+          <Col md={4}>
+            <Form.Group controlId="formPreferredPlanType">
+              <Form.Label>Preferred Plan Type:</Form.Label>
+              <Form.Control
+                as="select"
+                name="preferred_plan_type"
+                value={formData.preferred_plan_type}
+                onChange={handleChange}
+              >
+                <option value="">Select a plan type</option>
+                <option value="HMO">HMO</option>
+                <option value="PPO">PPO</option>
+                <option value="EPO">EPO</option>
+                <option value="POS">POS</option>
+              </Form.Control>
+            </Form.Group>
+          </Col>
         </Row>
         <Button variant="primary" type="submit" className="mt-3">
           Get Recommendation
@@ -281,6 +315,20 @@ function App() {
           <Card.Header>Outlier Information</Card.Header>
           <Card.Body>
             <Card.Text>{outlierMessage}</Card.Text>
+          </Card.Body>
+        </Card>
+      )}
+
+      {ncfRecommendations.length > 0 && (
+        <Card className="mt-4">
+          <Card.Header>Neural Collaborative Filtering Recommendations</Card.Header>
+          <Card.Body>
+            <ul>
+              {ncfRecommendations.map((recommendation, index) => (
+                <li key={index}>{recommendation}</li>
+              ))}
+            </ul>
+            <Button onClick={() => logInteraction(itemId, 5)}>Rate 5</Button>
           </Card.Body>
         </Card>
       )}
