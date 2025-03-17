@@ -102,8 +102,15 @@ def classify_value(value, thresholds):
 @app.route('/recommend', methods=['POST'])
 def recommend():
     try:
-        user_input = request.json  # Use JSON input instead of form data
+        user_input = request.json
         print("Received user input:", user_input)  # Debugging log
+
+        user_id = int(user_input.get("user_id", -1))
+        if user_id == -1:
+            print("Error: Invalid user_id")  # Debugging log
+            return jsonify({
+                "error": "Invalid user_id. Please ensure you are logged in or registered."
+            }), 400
 
         rule_recommendation = recommend_plan(user_input)
         state = user_input.get('state', '').strip()
@@ -212,25 +219,22 @@ def recommend():
             print(f"Outlier message for {state}: {outlier_message}")  # Debugging log
 
         # Generate NeuralCollaborativeFiltering recommendations
-        user_id = int(user_input.get("user_id", -1))  # Assume user_id is passed in the request
         if 0 <= user_id < USER_ITEM_MATRIX.shape[0]:
             ncf_recommendations = predict_user_item_interactions(NCF_MODEL, USER_ITEM_MATRIX, user_id)
         else:
-            print(f"Invalid user_id: {user_id}")  # Debugging log
+            print(f"Invalid user_id: {user_id}")
+            ncf_recommendations = []
 
     except Exception as e:
-        # Handle exceptions gracefully
-        print(f"Error during ML prediction: {e}")
-        ml_output_json = [{"error": f"Error in generating ML prediction: {str(e)}"}]
-        ml_summary = "An error occurred while generating state-level analysis."
-        ncf_recommendations = []
+        print(f"Error during recommendation: {e}")  # Debugging log
+        return jsonify({"error": str(e)}), 500
 
     return jsonify({
         "recommendation": rule_recommendation,
         "ml_prediction": ml_output_json,
         "ml_summary": ml_summary,
         "outlier_message": outlier_message,
-        "ncf_recommendations": ncf_recommendations,  # Include NCF recommendations in the response
+        "ncf_recommendations": ncf_recommendations,
     })
 
 @app.route('/register', methods=['POST'])
@@ -244,10 +248,42 @@ def register_user():
 @app.route('/log_interaction', methods=['POST'])
 def log_interaction():
     data = request.json
-    interaction = Interaction(**data)
+    user_id = data.get('user_id')
+    item_name = data.get('item_id')  # This is the plan name
+    rating = data.get('rating')
+
+    # Ensure the item exists in the `items` table
+    item = Item.query.filter_by(name=item_name).first()
+    if not item:
+        # Create the item if it doesn't exist
+        item = Item(name=item_name, description="Recommended plan")
+        db.session.add(item)
+        db.session.commit()
+
+    # Log the interaction
+    interaction = Interaction(
+        user_id=user_id,
+        item_id=item.id,  # Use the item's ID
+        rating=rating
+    )
     db.session.add(interaction)
     db.session.commit()
-    return jsonify({"message": "Interaction logged successfully"})
+    return jsonify({"message": f"Feedback logged for item: {item_name}"})
+
+@app.route('/get_interactions', methods=['GET'])
+def get_interactions():
+    interactions = Interaction.query.all()
+    data = [
+        {
+            "id": i.id,
+            "user_id": i.user_id,
+            "item_id": i.item_id,
+            "rating": i.rating,
+            "timestamp": i.timestamp
+        }
+        for i in interactions
+    ]
+    return jsonify(data)
 
 if __name__ == '__main__':
     app.run(debug=True)
