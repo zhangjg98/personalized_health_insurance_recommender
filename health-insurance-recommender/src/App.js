@@ -13,16 +13,18 @@ function App() {
     family_size: "",
     chronic_condition: "no",
     medical_care_frequency: "Low",
-    preferred_plan_type: "" // New field
+    preferred_plan_type: ""
   });
 
   const [recommendation, setRecommendation] = useState(null);
   const [mlSummary, setMlSummary] = useState("");
   const [mlData, setMlData] = useState(null);
   const [outlierMessage, setOutlierMessage] = useState("");
-  const [ncfRecommendations, setNcfRecommendations] = useState([]); // State for NCF recommendations
   const [error, setError] = useState("");
   const [tooltip, showTooltip] = useState(true);
+  const [currentUser, setCurrentUser] = useState({ id: 1 }); // Example user ID
+  const [feedbackGiven, setFeedbackGiven] = useState(false); // Track if feedback has been given
+  const [selectedFeedback, setSelectedFeedback] = useState(null); // Track selected feedback ("Yes" or "No")
 
   const handleChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
@@ -31,14 +33,17 @@ function App() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError("");
+    setFeedbackGiven(false); // Reset feedback state when a new recommendation is fetched
+    setSelectedFeedback(null);
 
     try {
+      const payload = { ...formData, user_id: currentUser.id }; // Include user_id in the payload
       const response = await fetch("/recommend", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify(formData),
+        body: JSON.stringify(payload),
       });
 
       if (!response.ok) {
@@ -50,7 +55,6 @@ function App() {
       setMlSummary(data.ml_summary);
       setMlData(data.ml_prediction);
       setOutlierMessage(data.outlier_message || "");
-      setNcfRecommendations(data.ncf_recommendations || []); // Set NCF recommendations
     } catch (err) {
       setError(err.message);
     }
@@ -67,6 +71,34 @@ function App() {
       console.log(data.message);
     } catch (err) {
       console.error('Error logging interaction:', err);
+    }
+  };
+
+  const logPlanFeedback = async (rating) => {
+    if (feedbackGiven) return; // Prevent multiple feedback submissions
+
+    try {
+      const response = await fetch('/log_interaction', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          user_id: currentUser.id,
+          item_id: recommendation?.plan || "Unknown Plan", // Use the plan name as the item_id
+          rating,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`Server error: ${response.status}`);
+      }
+
+      const data = await response.json();
+      console.log(data.message);
+
+      setFeedbackGiven(true); // Mark feedback as given
+      setSelectedFeedback(rating === 5 ? "Yes" : "No"); // Set selected feedback
+    } catch (err) {
+      console.error('Error logging feedback:', err);
     }
   };
 
@@ -88,7 +120,7 @@ function App() {
     },
   ];
 
-  useEffect(() => {}, [mlData, recommendation, mlSummary, outlierMessage, ncfRecommendations]);
+  useEffect(() => {}, [mlData, recommendation, mlSummary, outlierMessage]);
 
   return (
     <Container className="mt-4">
@@ -262,6 +294,27 @@ function App() {
           <Card.Body>
             <Card.Text>{recommendation.plan}</Card.Text>
             <Card.Text><em>{recommendation.justification}</em></Card.Text>
+            <div className="mt-3">
+              <h5>Was this recommendation helpful?</h5>
+              <Button
+                variant={selectedFeedback === "Yes" ? "success" : "outline-success"}
+                size="sm"
+                className={`me-2 ${selectedFeedback === "Yes" ? "selected-feedback" : ""}`}
+                onClick={() => logPlanFeedback(5)} // Positive feedback
+                disabled={feedbackGiven} // Disable button if feedback is already given
+              >
+                Yes
+              </Button>
+              <Button
+                variant={selectedFeedback === "No" ? "danger" : "outline-danger"}
+                size="sm"
+                className={selectedFeedback === "No" ? "selected-feedback" : ""}
+                onClick={() => logPlanFeedback(1)} // Negative feedback
+                disabled={feedbackGiven} // Disable button if feedback is already given
+              >
+                No
+              </Button>
+            </div>
           </Card.Body>
         </Card>
       )}
@@ -315,20 +368,6 @@ function App() {
           <Card.Header>Outlier Information</Card.Header>
           <Card.Body>
             <Card.Text>{outlierMessage}</Card.Text>
-          </Card.Body>
-        </Card>
-      )}
-
-      {ncfRecommendations.length > 0 && (
-        <Card className="mt-4">
-          <Card.Header>Neural Collaborative Filtering Recommendations</Card.Header>
-          <Card.Body>
-            <ul>
-              {ncfRecommendations.map((recommendation, index) => (
-                <li key={index}>{recommendation}</li>
-              ))}
-            </ul>
-            <Button onClick={() => logInteraction(itemId, 5)}>Rate 5</Button>
           </Card.Body>
         </Card>
       )}
