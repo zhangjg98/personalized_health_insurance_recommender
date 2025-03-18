@@ -22,7 +22,6 @@ function App() {
   const [outlierMessage, setOutlierMessage] = useState("");
   const [error, setError] = useState("");
   const [tooltip, showTooltip] = useState(true);
-  const [currentUser, setCurrentUser] = useState({ id: 1 }); // Example user ID
   const [feedbackGiven, setFeedbackGiven] = useState(false); // Track if feedback has been given
   const [selectedFeedback, setSelectedFeedback] = useState(null); // Track selected feedback ("Yes" or "No")
 
@@ -37,7 +36,7 @@ function App() {
     setSelectedFeedback(null);
 
     try {
-      const payload = { ...formData, user_id: currentUser.id }; // Include user_id in the payload
+      const payload = { ...formData, user_id: 1 }; // Use static user_id for now
       const response = await fetch("/recommend", {
         method: "POST",
         headers: {
@@ -60,20 +59,6 @@ function App() {
     }
   };
 
-  const logInteraction = async (itemId, rating) => {
-    try {
-      const response = await fetch('/log_interaction', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ user_id: currentUser.id, item_id: itemId, rating }),
-      });
-      const data = await response.json();
-      console.log(data.message);
-    } catch (err) {
-      console.error('Error logging interaction:', err);
-    }
-  };
-
   const logPlanFeedback = async (rating) => {
     if (feedbackGiven) return; // Prevent multiple feedback submissions
 
@@ -82,7 +67,7 @@ function App() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          user_id: currentUser.id,
+          user_id: 1, // Use static user_id for now
           item_id: recommendation?.plan || "Unknown Plan", // Use the plan name as the item_id
           rating,
         }),
@@ -107,18 +92,33 @@ function App() {
       key: "Standardized Medicare Payment per Capita",
       tooltip:
         "The average cost per beneficiary after adjusting for regional differences.",
+      classificationKey: "Standardized Medicare Payment per Capita Level",
     },
     {
       key: "Average Health Risk Score",
       tooltip:
         "A score representing the overall health risk of the state's Medicare population. Higher scores mean higher expected healthcare needs.",
+      classificationKey: "Average Health Risk Score Level",
     },
     {
       key: "Emergency Department Visit Rate (per 1,000 beneficiaries)",
       tooltip:
         "The estimated number of emergency department visits per 1,000 beneficiaries, indicating urgent care utilization.",
+      classificationKey: "Emergency Department Visit Rate (per 1,000 beneficiaries) Level",
     },
   ];
+
+  const classificationDescriptions = {
+    Low: "This value is lower than average.",
+    Moderate: "This value is around the average range.",
+    High: "This value is higher than average.",
+  };
+
+  const classificationColors = {
+    Low: "green",
+    Moderate: "orange",
+    High: "red",
+  };
 
   useEffect(() => {}, [mlData, recommendation, mlSummary, outlierMessage]);
 
@@ -335,6 +335,9 @@ function App() {
             <ul>
               {metricsInfo.map((item) => {
                 const metricValue = mlData[0][item.key];
+                const classification = mlData[0][item.classificationKey];
+                const description = classificationDescriptions[classification] || "No description available.";
+                const color = classificationColors[classification] || "black";
 
                 return (
                   <li key={item.key}>
@@ -353,7 +356,8 @@ function App() {
                     >
                       <strong>{item.key}:</strong>
                     </span>{" "}
-                    {metricValue !== undefined ? metricValue.toFixed(4) : "N/A"}
+                    <span style={{ color }}>{metricValue !== undefined ? metricValue.toFixed(4) : "N/A"}</span>{" "}
+                    <em>({classification || "Unknown"})</em> - {description}
                   </li>
                 );
               })}
