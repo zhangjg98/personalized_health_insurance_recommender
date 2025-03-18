@@ -1,3 +1,4 @@
+import pandas as pd
 # Description: This file contains the propositinoal logic for the insurance recommender system.
 
 # Recommendation function
@@ -139,8 +140,10 @@ def recommend_plan(user_input):
             "justification": "For someone who needs occasional medical care, a moderate deductible plan offers a good balance. It ensures manageable out-of-pocket costs while keeping premiums lower than low-deductible plans."
         }
     
-    # General fallback
+    # Fallback: Recommend the highest-rated plan
+    plan_feedback = pd.read_csv("plan_feedback_analysis.csv")
+    highest_rated_plan = plan_feedback.sort_values(by="rating", ascending=False).iloc[0]
     return {
-        "plan": "Plan Recommendation: Contact a representative for personalized advice",
-        "justification": "Based on the information provided, a representative is more likely to help you identify the most suitable plan for you."
-    }    
+        "plan": highest_rated_plan["plan"],
+        "justification": "This plan is highly rated by other users and may suit your needs."
+    }
