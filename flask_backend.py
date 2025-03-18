@@ -43,6 +43,12 @@ class Interaction(db.Model):
     rating = db.Column(db.Float)
     timestamp = db.Column(db.DateTime, default=db.func.current_timestamp())
 
+class UserItemMatrix(db.Model):
+    __tablename__ = 'user_item_matrix'
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), primary_key=True)
+    item_id = db.Column(db.Integer, db.ForeignKey('items.id'), primary_key=True)
+    rating = db.Column(db.Float)
+
 def create_tables():
     db.create_all()
 
@@ -271,6 +277,16 @@ def log_interaction():
     )
     db.session.add(interaction)
     db.session.commit()
+
+    # Update the user-item matrix in the database
+    user_item_entry = UserItemMatrix.query.filter_by(user_id=user_id, item_id=item.id).first()
+    if user_item_entry:
+        user_item_entry.rating = rating  # Update existing entry
+    else:
+        user_item_entry = UserItemMatrix(user_id=user_id, item_id=item.id, rating=rating)
+        db.session.add(user_item_entry)  # Add new entry
+    db.session.commit()
+
     return jsonify({"message": f"Feedback logged for item: {item_name}"})
 
 @app.route('/get_interactions', methods=['GET'])
