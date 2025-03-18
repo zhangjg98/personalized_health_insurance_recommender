@@ -4,7 +4,7 @@ from flask_cors import CORS
 from propositional_logic import recommend_plan
 from ml_model import predict_medicare_spending
 from thresholds import compute_dynamic_thresholds, unified_thresholds
-from neural_collaborative_filtering import load_ncf_model, predict_user_item_interactions  # Import NCF utilities
+from neural_collaborative_filtering import load_ncf_model, predict_user_item_interactions
 import pandas as pd
 
 app = Flask(__name__)
@@ -27,7 +27,7 @@ class User(db.Model):
     family_size = db.Column(db.String(50))
     chronic_condition = db.Column(db.Boolean)
     medical_care_frequency = db.Column(db.String(50))
-    preferred_plan_type = db.Column(db.String(50))  # Example of a flexible field
+    preferred_plan_type = db.Column(db.String(50))
 
 class Item(db.Model):
     __tablename__ = 'items'
@@ -43,12 +43,9 @@ class Interaction(db.Model):
     rating = db.Column(db.Float)
     timestamp = db.Column(db.DateTime, default=db.func.current_timestamp())
 
-# Remove the @app.before_first_request decorator
-# @app.before_first_request
 def create_tables():
     db.create_all()
 
-# Wrap the create_tables() call in an application context
 with app.app_context():
     create_tables()
 
@@ -57,7 +54,7 @@ friendly_names = {
     'TOT_MDCR_STDZD_PYMT_PC': "Standardized Medicare Payment per Capita",
     'TOT_MDCR_PYMT_PC': "Actual Medicare Payment per Capita",
     'BENE_AVG_RISK_SCRE': "Average Health Risk Score",
-    'IP_CVRD_STAYS_PER_1000_BENES': "Inpatient Stay Rate (per 1,000 beneficiaries)", 
+    'IP_CVRD_STAYS_PER_1000_BENES': "Inpatient Stay Rate (per 1,000 beneficiaries)",
     'ER_VISITS_PER_1000_BENES': "Emergency Department Visit Rate (per 1,000 beneficiaries)",
     'MA_PRTCPTN_RATE': "Medicare Advantage Participation Rate",
     'BENE_DUAL_PCT': "Medicaid Eligibility Percentage",
@@ -65,13 +62,13 @@ friendly_names = {
 
 # Compute dynamic thresholds from the processed CSV
 keys_for_thresholds = [
-    "TOT_MDCR_STDZD_PYMT_PC", 
+    "TOT_MDCR_STDZD_PYMT_PC",
     "TOT_MDCR_PYMT_PC",
-    "BENE_AVG_RISK_SCRE", 
+    "BENE_AVG_RISK_SCRE",
     "IP_CVRD_STAYS_PER_1000_BENES",
     "ER_VISITS_PER_1000_BENES",
     "MA_PRTCPTN_RATE",
-    'BENE_DUAL_PCT'
+    "BENE_DUAL_PCT"
 ]
 dynamic_thresholds = unified_thresholds("processed_user_item_matrix.csv", keys_for_thresholds)
 
@@ -90,12 +87,12 @@ def classify_value(value, thresholds):
     Classify a value as 'Low', 'Moderate', or 'High' based on thresholds.
     """
     low, high = thresholds["low"], thresholds["high"]
-    mid = (low + high) / 2  # Calculate the midpoint
+    mid = (low + high) / 2
     if value < low:
         return "Low"
     elif value > high:
         return "High"
-    elif abs(value - mid) <= (high - low) * 0.25:  # Stricter "Moderate" range
+    elif abs(value - mid) <= (high - low) * 0.25:
         return "Moderate"
     return "Low" if value < mid else "High"
 
@@ -103,23 +100,23 @@ def classify_value(value, thresholds):
 def recommend():
     try:
         user_input = request.json
-        print("Received user input:", user_input)  # Debugging log
+        print("Received user input:", user_input)
 
         user_id = int(user_input.get("user_id", -1))
         if user_id == -1:
-            print("Error: Invalid user_id")  # Debugging log
+            print("Error: Invalid user_id")
             return jsonify({
                 "error": "Invalid user_id. Please ensure you are logged in or registered."
             }), 400
 
         rule_recommendation = recommend_plan(user_input)
         state = user_input.get('state', '').strip()
-        
+
         # Initialize variables with default values
-        ml_output_json = []  # Default to an empty list
+        ml_output_json = []
         ml_summary = ""
         outlier_message = ""
-        ncf_recommendations = []  # Add NCF recommendations
+        ncf_recommendations = []
 
         # Validate input
         if not state:
@@ -128,7 +125,7 @@ def recommend():
                 "ml_prediction": ml_output_json,
                 "ml_summary": "No state provided. Unable to generate state-level analysis.",
                 "outlier_message": "",
-                "ncf_recommendations": ncf_recommendations,  # Include NCF recommendations
+                "ncf_recommendations": ncf_recommendations,
             })
 
         # Load raw values from processed_user_item_matrix.csv
@@ -139,11 +136,11 @@ def recommend():
                 "ml_prediction": ml_output_json,
                 "ml_summary": f"No data available for state: {state}.",
                 "outlier_message": "",
-                "ncf_recommendations": ncf_recommendations,  # Include NCF recommendations
+                "ncf_recommendations": ncf_recommendations,
             })
 
         state_data = raw_data.loc[state]
-        print(f"Raw data for {state}:\n{state_data}")  # Debugging log
+        print(f"Raw data for {state}:\n{state_data}")
 
         # Classify raw values for outlier information
         classifications = {}
@@ -152,12 +149,19 @@ def recommend():
                 value = state_data[key]
                 classification = classify_value(value, dynamic_thresholds[key])
                 classifications[friendly_name] = classification
-                print(f"Processing {friendly_name}: Value={value}, Classification={classification}")  # Debugging log
+                print(f"Processing {friendly_name}: Value={value}, Classification={classification}")
 
         # Generate ML predictions
         ml_prediction_df = predict_medicare_spending(state)
-        print("ML Prediction DataFrame:\n", ml_prediction_df)  # Debugging log
+        print("ML Prediction DataFrame:\n", ml_prediction_df)
         ml_prediction_df = ml_prediction_df.rename(columns=friendly_names)
+
+        # Add classification labels to ML predictions
+        for key, friendly_name in friendly_names.items():
+            if friendly_name in ml_prediction_df.columns:
+                ml_prediction_df[f"{friendly_name} Level"] = ml_prediction_df[friendly_name].apply(
+                    lambda x: classify_value(x, dynamic_thresholds[key])
+                )
 
         # Convert ML predictions to JSON for frontend display
         ml_output_json = ml_prediction_df.to_dict(orient="records")
@@ -180,32 +184,32 @@ def recommend():
         else:
             spending_text = "moderate spending"
             rule_recommendation["plan"] += " (State spending levels appear moderate.)"
-        
+
         if risk_classification == "High":
             risk_text = "a higher-than-average risk profile"
         elif risk_classification == "Low":
             risk_text = "a lower-than-average risk profile"
         else:
             risk_text = "an average risk profile"
-        
+
         if er_rate_classification == "High":
             er_text = "a high rate of emergency visits"
         elif er_rate_classification == "Low":
             er_text = "a low rate of emergency visits"
         else:
             er_text = "a moderate rate of emergency visits"
-        
+
         ml_summary = (
             f"State-level analysis indicates {spending_text}, with {risk_text} and {er_text}. "
             "These factors suggest that you should consider plans that balance cost and benefits accordingly."
         )
-        
+
         # Generate outlier information based on raw data
         outlier_row = state_summary[state_summary["State"] == state]
         if not outlier_row.empty:
             high_count = outlier_row["High Count"].iloc[0]
             low_count = outlier_row["Low Count"].iloc[0]
-            
+
             # Identify specific metrics classified as "High" or "Low"
             high_metrics = [k for k, v in classifications.items() if v == "High"]
             low_metrics = [k for k, v in classifications.items() if v == "Low"]
@@ -216,7 +220,7 @@ def recommend():
                 outlier_message += f"Metrics classified as 'High': {', '.join(high_metrics)}. "
             if low_metrics:
                 outlier_message += f"Metrics classified as 'Low': {', '.join(low_metrics)}."
-            print(f"Outlier message for {state}: {outlier_message}")  # Debugging log
+            print(f"Outlier message for {state}: {outlier_message}")
 
         # Generate NeuralCollaborativeFiltering recommendations
         if 0 <= user_id < USER_ITEM_MATRIX.shape[0]:
@@ -226,7 +230,7 @@ def recommend():
             ncf_recommendations = []
 
     except Exception as e:
-        print(f"Error during recommendation: {e}")  # Debugging log
+        print(f"Error during recommendation: {e}")
         return jsonify({"error": str(e)}), 500
 
     return jsonify({
@@ -249,13 +253,12 @@ def register_user():
 def log_interaction():
     data = request.json
     user_id = data.get('user_id')
-    item_name = data.get('item_id')  # This is the plan name
+    item_name = data.get('item_id')
     rating = data.get('rating')
 
     # Ensure the item exists in the `items` table
     item = Item.query.filter_by(name=item_name).first()
     if not item:
-        # Create the item if it doesn't exist
         item = Item(name=item_name, description="Recommended plan")
         db.session.add(item)
         db.session.commit()
@@ -263,7 +266,7 @@ def log_interaction():
     # Log the interaction
     interaction = Interaction(
         user_id=user_id,
-        item_id=item.id,  # Use the item's ID
+        item_id=item.id,
         rating=rating
     )
     db.session.add(interaction)
