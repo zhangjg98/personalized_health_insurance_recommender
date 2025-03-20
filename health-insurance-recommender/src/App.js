@@ -183,7 +183,7 @@ function App() {
           </Col>
           <Col md={4}>
             <Form.Group controlId="formState">
-              <Form.Label>State:</Form.Label>
+              <Form.Label>State (optional):</Form.Label>
               <Form.Control as="select" name="state" value={formData.state} onChange={handleChange}>
                 <option value="">Prefer not to say</option>
                 <option value="AL">Alabama</option>
@@ -301,7 +301,7 @@ function App() {
           </Col>
           <Col md={4}>
             <Form.Group controlId="formPreferredPlanType">
-              <Form.Label>Preferred Plan Type:</Form.Label>
+              <Form.Label>Preferred Plan Type (optional):</Form.Label>
               <Form.Control
                 as="select"
                 name="preferred_plan_type"
@@ -320,7 +320,7 @@ function App() {
         <Row>
           <Col md={12}>
             <Form.Group controlId="formPriority">
-              <Form.Label>What is most important to you in a plan?</Form.Label>
+              <Form.Label>What is most important to you in a plan? (optional):</Form.Label>
               <Form.Control
                 as="select"
                 name="priority"
@@ -367,29 +367,35 @@ function App() {
               </div>
             ))}
 
-            <div className="mt-3">
-              <h5>Was this recommendation helpful?</h5>
-              <Button
-                variant={selectedFeedback === "Yes" ? "success" : "outline-success"}
-                size="sm"
-                className={`me-2 ${selectedFeedback === "Yes" ? "selected-feedback" : ""}`}
-                onClick={() => logPlanFeedback(5)} // Positive feedback
-                disabled={feedbackGiven} // Disable button if feedback is already given
-              >
-                Yes
-              </Button>
-              <Button
-                variant={selectedFeedback === "No" ? "danger" : "outline-danger"}
-                size="sm"
-                className={selectedFeedback === "No" ? "selected-feedback" : ""}
-                onClick={() => logPlanFeedback(1)} // Negative feedback
-                disabled={feedbackGiven} // Disable button if feedback is already given
-              >
-                No
-              </Button>
-            </div>
+            {/* Only show feedback section if no fallback recommendation is present */}
+            {recommendations.length > 0 &&
+              recommendations.every((rec) => rec.priority !== "insufficient_criteria") && (
+              <div className="mt-3">
+                <h5>Was this recommendation helpful?</h5>
+                <Button
+                  variant={selectedFeedback === "Yes" ? "success" : "outline-success"}
+                  size="sm"
+                  className={`me-2 ${selectedFeedback === "Yes" ? "selected-feedback" : ""}`}
+                  onClick={() => logPlanFeedback(5)} // Positive feedback
+                  disabled={feedbackGiven} // Disable button if feedback is already given
+                >
+                  Yes
+                </Button>
+                <Button
+                  variant={selectedFeedback === "No" ? "danger" : "outline-danger"}
+                  size="sm"
+                  className={selectedFeedback === "No" ? "selected-feedback" : ""}
+                  onClick={() => logPlanFeedback(1)} // Negative feedback
+                  disabled={feedbackGiven} // Disable button if feedback is already given
+                >
+                  No
+                </Button>
+              </div>
+            )}
 
-            {selectedFeedback === "Yes" && recommendations.length > 1 && (
+            {selectedFeedback === "Yes" &&
+              recommendations.length > 1 &&
+              recommendations.every((rec) => rec.priority !== "insufficient_criteria") && (
               <div className="mt-3">
                 <h5>Which recommendation was most useful to you?</h5>
                 <Form.Select
