@@ -199,9 +199,12 @@ def recommend_plan(user_input, priority=""):
             rec["justification"] += f" This recommendation aligns with your preferred plan type: {preferred_plan_type}."
 
     # Handle conflicts between primary recommendation and preferred plan type
-    if preferred_plan_type and recommendations:
-        primary_recommendation = recommendations[0]
-        if preferred_plan_type not in primary_recommendation.get("plan", "") and preferred_plan_recommendation:
+    if preferred_plan_type:
+        # Check if any existing recommendation already matches the preferred plan type
+        preferred_plan_exists = any(
+            preferred_plan_type in rec.get("plan", "") for rec in recommendations
+        )
+        if not preferred_plan_exists and preferred_plan_recommendation:
             recommendations.append(preferred_plan_recommendation)
 
     # Fallback: Recommend the highest-rated plan if no recommendations exist
