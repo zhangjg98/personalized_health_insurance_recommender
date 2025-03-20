@@ -11,6 +11,7 @@ def recommend_plan(user_input, priority=""):
     family_size = user_input.get('family_size', '')
     chronic_condition = user_input.get('chronic_condition', 'no')
     medical_care_frequency = user_input.get('medical_care_frequency', 'Low')
+    preferred_plan_type = user_input.get('preferred_plan_type', '')
 
     recommendations = []
 
@@ -78,7 +79,7 @@ def recommend_plan(user_input, priority=""):
                 "justification": "Adults with low income should prioritize affordability over all else to ensure that they are covered. These plans should still include preventive care options to ensure basic health needs and services.",
                 "priority": "strongly recommended"
             })
-        if medical_care_frequency == "High":
+        elif medical_care_frequency == "High":
             recommendations.append({
                 "plan": "Plan Recommendation: Prioritize a Moderate Deductible Plan",
                 "justification": "If you have frequent medical care visits, it is important to have a deductible that is at the very least moderate. A moderate deductible ensures a reasonable balance between monthly premiums and out of pocket costs incurred until the deductible amount is hit.",
@@ -101,11 +102,12 @@ def recommend_plan(user_input, priority=""):
                 "justification": "PPO plans give great flexibility that allow you to see doctors in and outside of the plan network. You ensure that your family members will get the care they need while not restricting them.",
                 "priority": "strongly recommended"
             })
-        recommendations.append({
-            "plan": "Plan Recommendation: Consider Family Coverage with Pediatric and Maternity Benefits",
-            "justification": "Pediatric and maternity benefits will help cover medical care for children and mothers (for pregnancy and childbirth) respectively. Making sure that your family gets the benefits they need is important with a family.",
-            "priority": "strongly recommended"
-        })
+        else:
+            recommendations.append({
+                "plan": "Plan Recommendation: Consider Family Coverage with Pediatric and Maternity Benefits",
+                "justification": "Pediatric and maternity benefits will help cover medical care for children and mothers (for pregnancy and childbirth) respectively. Making sure that your family gets the benefits they need is important with a family.",
+                "priority": "strongly recommended"
+            })
     elif family_size == "2_to_3" and not recommendations:
         recommendations.append({
             "plan": "Plan Recommendation: Consider Family Plans with Preventive Care and Moderate Deductibles",
@@ -134,32 +136,44 @@ def recommend_plan(user_input, priority=""):
                 "priority": "strongly recommended"
             })
 
-    # User-selected priority (evaluated after high-priority rules)
-    if priority:
-        if priority == "Low Premiums":
-            recommendations.append({
-                "plan": "Plan Recommendation: High Deductible, Low Premium Plan",
-                "justification": "Since you prioritize low premiums, a high deductible plan is recommended. These plans have lower monthly costs, making them more affordable.",
+    # Rules based on Preferred Plan Type
+    preferred_plan_recommendation = None
+    if preferred_plan_type:
+        if preferred_plan_type == "HMO":
+            preferred_plan_recommendation = {
+                "plan": "Plan Recommendation: Health Maintenance Organization (HMO) Plan",
+                "justification": "HMO plans typically offer lower premiums and coordinated care within a network, making them ideal if you prefer managed care.",
                 "priority": "user-selected"
-            })
-        elif priority == "Comprehensive Coverage":
-            recommendations.append({
-                "plan": "Plan Recommendation: Comprehensive PPO Plan",
-                "justification": "Since you value comprehensive coverage, a PPO plan is recommended. These plans provide flexibility and access to a wide range of healthcare providers.",
+            }
+        elif preferred_plan_type == "PPO":
+            preferred_plan_recommendation = {
+                "plan": "Plan Recommendation: Preferred Provider Organization (PPO) Plan",
+                "justification": "PPO plans provide more flexibility in choosing providers and generally offer comprehensive benefits.",
                 "priority": "user-selected"
-            })
-        elif priority == "Preventive Care":
-            recommendations.append({
-                "plan": "Plan Recommendation: Preventive Care-Focused Plan",
-                "justification": "Since you prioritize preventive care, this plan includes extensive preventive services to help you maintain good health.",
+            }
+        elif preferred_plan_type == "EPO":
+            preferred_plan_recommendation = {
+                "plan": "Plan Recommendation: Exclusive Provider Organization (EPO) Plan",
+                "justification": "EPO plans require using a network of providers but often have lower premiums than PPOs. They’re a good option if you don’t need out-of-network coverage.",
                 "priority": "user-selected"
-            })
-        elif priority == "Low Deductibles":
-            recommendations.append({
-                "plan": "Plan Recommendation: Low Deductible Plan",
-                "justification": "Since you prefer low deductibles, this plan minimizes out-of-pocket costs before insurance coverage begins.",
+            }
+        elif preferred_plan_type == "POS":
+            preferred_plan_recommendation = {
+                "plan": "Plan Recommendation: Point of Service (POS) Plan",
+                "justification": "POS plans combine features of HMOs and PPOs, offering more flexibility than HMOs while keeping costs relatively low.",
                 "priority": "user-selected"
-            })
+            }
+
+    # Add justification for matching preferred plan type
+    for rec in recommendations:
+        if preferred_plan_type and preferred_plan_type in rec.get("plan", ""):
+            rec["justification"] += f" This recommendation aligns with your preferred plan type: {preferred_plan_type}."
+
+    # Handle conflicts between primary recommendation and preferred plan type
+    if preferred_plan_type and recommendations:
+        primary_recommendation = recommendations[0]
+        if preferred_plan_type not in primary_recommendation.get("plan", "") and preferred_plan_recommendation:
+            recommendations.append(preferred_plan_recommendation)
 
     # Fallback: Recommend the highest-rated plan if no recommendations exist
     if not recommendations:
