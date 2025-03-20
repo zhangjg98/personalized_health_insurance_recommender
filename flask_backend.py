@@ -78,9 +78,6 @@ keys_for_thresholds = [
 ]
 dynamic_thresholds = unified_thresholds("processed_user_item_matrix.csv", keys_for_thresholds)
 
-# Load the summary of states with multiple "High" or "Low" classifications
-state_summary = pd.read_csv("state_summary.csv")
-
 # Load the NeuralCollaborativeFiltering model and user-item matrix
 NCF_MODEL, USER_ITEM_MATRIX = load_ncf_model()
 
@@ -134,6 +131,9 @@ def recommend():
                 "ncf_recommendations": ncf_recommendations,
             })
 
+        # Load the "National" row for comparison
+        national_data = pd.read_csv("processed_user_item_matrix.csv", index_col=0).loc["National"]
+
         # Generate ML predictions (trained data)
         ml_prediction_df = predict_medicare_spending(state)
         print("ML Prediction DataFrame:\n", ml_prediction_df)
@@ -145,8 +145,32 @@ def recommend():
                     lambda x: classify_value(x, dynamic_thresholds[key])
                 )
 
-        # Convert ML predictions to JSON for frontend display
+        # Add comparisons to national averages
+        comparisons = {}
+        for key, friendly_name in friendly_names.items():
+            if friendly_name in ml_prediction_df.columns:
+                state_value = ml_prediction_df[friendly_name].iloc[0]
+                national_value = national_data[key]
+                if state_value > national_value:
+                    comparison = "It is above the national average."
+                elif state_value < national_value:
+                    comparison = "It is below the national average."
+                else:
+                    comparison = "It is on par with the national average."
+                comparisons[friendly_name] = comparison
+
+        # Include comparisons in the response
         ml_output_json = ml_prediction_df.to_dict(orient="records")
+        for metric, comparison in comparisons.items():
+            ml_output_json[0][f"{metric} Comparison"] = comparison
+
+        # Add clarification message with percentage thresholds
+        clarification_message = (
+            "The classification (e.g., 'Moderate') is based on thresholds derived from state-level data, "
+            "specifically the 10th to 90th percentiles. Values within this range are classified as 'Moderate'. "
+            "The comparison (e.g., 'above the national average') is relative to the national average, "
+            "calculated as the mean of all state values."
+        )
 
         # Build summary messages based on ML predictions
         spending = ml_prediction_df["Standardized Medicare Payment per Capita"].iloc[0]
@@ -223,6 +247,7 @@ def recommend():
         "ml_prediction": ml_output_json,
         "ml_summary": ml_summary,
         "outlier_message": outlier_message,
+        "clarification_message": clarification_message,  # Add clarification to the response
         "ncf_recommendations": ncf_recommendations,
     })
 
