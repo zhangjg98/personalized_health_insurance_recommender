@@ -93,18 +93,21 @@ function App() {
       tooltip:
         "The average cost per beneficiary after adjusting for regional differences.",
       classificationKey: "Standardized Medicare Payment per Capita Level",
+      comparisonKey: "Standardized Medicare Payment per Capita Comparison",
     },
     {
       key: "Average Health Risk Score",
       tooltip:
         "A score representing the overall health risk of the state's Medicare population. Higher scores mean higher expected healthcare needs.",
       classificationKey: "Average Health Risk Score Level",
+      comparisonKey: "Average Health Risk Score Comparison",
     },
     {
       key: "Emergency Department Visit Rate (per 1,000 beneficiaries)",
       tooltip:
         "The estimated number of emergency department visits per 1,000 beneficiaries, indicating urgent care utilization.",
       classificationKey: "Emergency Department Visit Rate (per 1,000 beneficiaries) Level",
+      comparisonKey: "Emergency Department Visit Rate (per 1,000 beneficiaries) Comparison",
     },
   ];
 
@@ -336,6 +339,7 @@ function App() {
               {metricsInfo.map((item) => {
                 const metricValue = mlData[0][item.key];
                 const classification = mlData[0][item.classificationKey];
+                const comparison = mlData[0][item.comparisonKey]; // Updated comparison text
                 const description = classificationDescriptions[classification] || "No description available.";
                 const color = classificationColors[classification] || "black";
 
@@ -347,22 +351,28 @@ function App() {
                         cursor: "help",
                       }}
                       data-tip={item.tooltip}
-                      data-for="tooltip"
-                      onMouseEnter={() => showTooltip(true)}
+                      onMouseEnter={() => showTooltip(true)} // Show tooltip on hover
                       onMouseLeave={() => {
-                        showTooltip(false);
-                        setTimeout(() => showTooltip(true), 50);
+                        showTooltip(false); // Hide tooltip temporarily
+                        setTimeout(() => showTooltip(true), 50); // Re-enable tooltip after a short delay
                       }}
                     >
                       <strong>{item.key}:</strong>
                     </span>{" "}
                     <span style={{ color }}>{metricValue !== undefined ? metricValue.toFixed(4) : "N/A"}</span>{" "}
-                    <em>({classification || "Unknown"})</em> - {description}
+                    <em>({classification || "Unknown"})</em> - {description}{" "}
+                    <span>{comparison}</span> {/* Display comparison as a separate sentence */}
                   </li>
                 );
               })}
             </ul>
-            {tooltip && <ReactTooltip id="tooltip" place="right" type="dark" effect="solid" delayHide={100} />}
+            {tooltip && <ReactTooltip effect="solid" />} {/* Tooltip component */}
+            <p className="mt-3 text-muted">
+              <strong>Note:</strong> The values shown in "Predicted Medicare Spending Details" are predictions based on historical data and trained machine learning models. These predictions aim to provide insights into state-level trends and are not exact measurements.
+            </p>
+            <p className="mt-3 text-muted">
+              <strong>Additional Note:</strong> The classification (e.g., "Moderate") is based on thresholds derived from state-level data, specifically the 10th to 90th percentiles. Values within this range are classified as "Moderate". The comparison (e.g., "above the national average") is relative to the national average, calculated as the mean of all state values.
+            </p>
           </Card.Body>
         </Card>
       )}
