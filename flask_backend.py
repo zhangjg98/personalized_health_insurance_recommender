@@ -107,12 +107,11 @@ def recommend():
 
         user_id = int(user_input.get("user_id", -1))
         if user_id == -1:
-            print("Error: Invalid user_id")
-            return jsonify({
-                "error": "Invalid user_id. Please ensure you are logged in or registered."
-            }), 400
+            return jsonify({"error": "Invalid user_id. Please ensure you are logged in or registered."}), 400
 
-        rule_recommendation = recommend_plan(user_input)
+        priority = user_input.get("priority", "")  # Get a single priority
+        recommendations = recommend_plan(user_input, priority)  # Pass the single priority
+
         state = user_input.get('state', '').strip()
 
         # Initialize variables with default values
@@ -124,7 +123,7 @@ def recommend():
         # Validate input
         if not state:
             return jsonify({
-                "recommendation": rule_recommendation,
+                "recommendations": recommendations,  # Return multiple recommendations
                 "ml_prediction": ml_output_json,
                 "ml_summary": "No state provided. Unable to generate state-level analysis.",
                 "outlier_message": "",
@@ -172,6 +171,13 @@ def recommend():
             "calculated as the mean of all state values."
         )
 
+        # Add clarification message for predicted values
+        prediction_context_message = (
+            "The values shown in 'Predicted Medicare Spending Details' are predictions based on historical data "
+            "and trained machine learning models. These predictions aim to provide insights into state-level trends "
+            "and are not exact measurements."
+        )
+
         # Build summary messages based on ML predictions
         spending = ml_prediction_df["Standardized Medicare Payment per Capita"].iloc[0]
         risk = ml_prediction_df["Average Health Risk Score"].iloc[0]
@@ -181,34 +187,35 @@ def recommend():
         risk_classification = classify_value(risk, dynamic_thresholds["BENE_AVG_RISK_SCRE"])
         er_rate_classification = classify_value(er_rate, dynamic_thresholds["ER_VISITS_PER_1000_BENES"])
 
-        if spending_classification == "High":
-            spending_text = "high spending"
-            rule_recommendation["plan"] += " (Given high state spending, consider comprehensive coverage.)"
-        elif spending_classification == "Low":
-            spending_text = "low spending"
-            rule_recommendation["plan"] += " (Given low state spending, consider plans with lower premiums.)"
-        else:
-            spending_text = "moderate spending"
-            rule_recommendation["plan"] += " (State spending levels appear moderate.)"
+        if recommendations and recommendations[0]["plan"] is not None:  # Ensure the plan is not None
+            if spending_classification == "High":
+                spending_text = "high spending"
+                recommendations[0]["plan"] += " (Given high state spending, consider comprehensive coverage.)"
+            elif spending_classification == "Low":
+                spending_text = "low spending"
+                recommendations[0]["plan"] += " (Given low state spending, consider plans with lower premiums.)"
+            else:
+                spending_text = "moderate spending"
+                recommendations[0]["plan"] += " (State spending levels appear moderate.)"
 
-        if risk_classification == "High":
-            risk_text = "a higher-than-average risk profile"
-        elif risk_classification == "Low":
-            risk_text = "a lower-than-average risk profile"
-        else:
-            risk_text = "an average risk profile"
+            if risk_classification == "High":
+                risk_text = "a higher-than-average risk profile"
+            elif risk_classification == "Low":
+                risk_text = "a lower-than-average risk profile"
+            else:
+                risk_text = "an average risk profile"
 
-        if er_rate_classification == "High":
-            er_text = "a high rate of emergency visits"
-        elif er_rate_classification == "Low":
-            er_text = "a low rate of emergency visits"
-        else:
-            er_text = "a moderate rate of emergency visits"
+            if er_rate_classification == "High":
+                er_text = "a high rate of emergency visits"
+            elif er_rate_classification == "Low":
+                er_text = "a low rate of emergency visits"
+            else:
+                er_text = "a moderate rate of emergency visits"
 
-        ml_summary = (
-            f"State-level analysis indicates {spending_text}, with {risk_text} and {er_text}. "
-            "These factors suggest that you should consider plans that balance cost and benefits accordingly."
-        )
+            ml_summary = (
+                f"State-level analysis indicates {spending_text}, with {risk_text} and {er_text}. "
+                "These factors suggest that you should consider plans that balance cost and benefits accordingly."
+            )
 
         # Generate Outlier Information using trained data
         classifications = {}
@@ -243,11 +250,12 @@ def recommend():
         return jsonify({"error": str(e)}), 500
 
     return jsonify({
-        "recommendation": rule_recommendation,
+        "recommendations": recommendations,  # Return multiple recommendations
         "ml_prediction": ml_output_json,
         "ml_summary": ml_summary,
         "outlier_message": outlier_message,
-        "clarification_message": clarification_message,  # Add clarification to the response
+        "clarification_message": clarification_message,
+        "prediction_context_message": prediction_context_message,  # Add prediction context
         "ncf_recommendations": ncf_recommendations,
     })
 
@@ -263,7 +271,7 @@ def register_user():
 def log_interaction():
     data = request.json
     user_id = data.get('user_id')
-    item_name = data.get('item_id')
+    item_name = data.get('item_id')  # Use the selected recommendation's plan name
     rating = data.get('rating')
 
     # Ensure the item exists in the `items` table
@@ -280,15 +288,6 @@ def log_interaction():
         rating=rating
     )
     db.session.add(interaction)
-    db.session.commit()
-
-    # Update the user-item matrix in the database
-    user_item_entry = UserItemMatrix.query.filter_by(user_id=user_id, item_id=item.id).first()
-    if user_item_entry:
-        user_item_entry.rating = rating  # Update existing entry
-    else:
-        user_item_entry = UserItemMatrix(user_id=user_id, item_id=item.id, rating=rating)
-        db.session.add(user_item_entry)  # Add new entry
     db.session.commit()
 
     return jsonify({"message": f"Feedback logged for item: {item_name}"})
