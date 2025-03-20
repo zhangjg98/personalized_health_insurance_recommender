@@ -164,6 +164,33 @@ def recommend_plan(user_input, priority=""):
                 "priority": "user-selected"
             }
 
+    # User-selected priority (evaluated after high-priority rules)
+    if priority:
+        if priority == "Low Premiums":
+            recommendations.append({
+                "plan": "Plan Recommendation: High Deductible, Low Premium Plan",
+                "justification": "Since you prioritize low premiums, a high deductible plan is recommended. These plans have lower monthly costs, making them more affordable.",
+                "priority": "user-selected"
+            })
+        elif priority == "Comprehensive Coverage":
+            recommendations.append({
+                "plan": "Plan Recommendation: Comprehensive PPO Plan",
+                "justification": "Since you value comprehensive coverage, a PPO plan is recommended. These plans provide flexibility and access to a wide range of healthcare providers.",
+                "priority": "user-selected"
+            })
+        elif priority == "Preventive Care":
+            recommendations.append({
+                "plan": "Plan Recommendation: Preventive Care-Focused Plan",
+                "justification": "Since you prioritize preventive care, this plan includes extensive preventive services to help you maintain good health.",
+                "priority": "user-selected"
+            })
+        elif priority == "Low Deductibles":
+            recommendations.append({
+                "plan": "Plan Recommendation: Low Deductible Plan",
+                "justification": "Since you prefer low deductibles, this plan minimizes out-of-pocket costs before insurance coverage begins.",
+                "priority": "user-selected"
+            })
+
     # Add justification for matching preferred plan type
     for rec in recommendations:
         if preferred_plan_type and preferred_plan_type in rec.get("plan", ""):
