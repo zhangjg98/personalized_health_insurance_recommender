@@ -1,6 +1,6 @@
 from flask import Flask, render_template, request, jsonify
-from flask_sqlalchemy import SQLAlchemy
 from flask_cors import CORS
+from database import db, User, Item, Interaction, UserItemMatrix  # Import models from database.py
 from propositional_logic import recommend_plan
 from ml_model import predict_medicare_spending
 from thresholds import compute_dynamic_thresholds, unified_thresholds
@@ -14,46 +14,13 @@ CORS(app)
 app.config['SQLALCHEMY_DATABASE_URI'] = 'postgresql://recommender_user:securepassword@localhost/health_insurance_recommender'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
-db = SQLAlchemy(app)
-
-# Define database models
-class User(db.Model):
-    __tablename__ = 'users'
-    id = db.Column(db.Integer, primary_key=True)
-    age_group = db.Column(db.String(50))
-    smoker = db.Column(db.Boolean)
-    bmi_category = db.Column(db.String(50))
-    income = db.Column(db.String(50))
-    family_size = db.Column(db.String(50))
-    chronic_condition = db.Column(db.Boolean)
-    medical_care_frequency = db.Column(db.String(50))
-    preferred_plan_type = db.Column(db.String(50))
-
-class Item(db.Model):
-    __tablename__ = 'items'
-    id = db.Column(db.Integer, primary_key=True)
-    name = db.Column(db.String(255))
-    description = db.Column(db.Text)
-
-class Interaction(db.Model):
-    __tablename__ = 'interactions'
-    id = db.Column(db.Integer, primary_key=True)
-    user_id = db.Column(db.Integer, db.ForeignKey('users.id'))
-    item_id = db.Column(db.Integer, db.ForeignKey('items.id'))
-    rating = db.Column(db.Float)
-    timestamp = db.Column(db.DateTime, default=db.func.current_timestamp())
-
-class UserItemMatrix(db.Model):
-    __tablename__ = 'user_item_matrix'
-    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), primary_key=True)
-    item_id = db.Column(db.Integer, db.ForeignKey('items.id'), primary_key=True)
-    rating = db.Column(db.Float)
+db.init_app(app)  # Initialize the database with the Flask app
 
 def create_tables():
-    db.create_all()
+    with app.app_context():
+        db.create_all()
 
-with app.app_context():
-    create_tables()
+create_tables()
 
 # Define a mapping from technical to friendly names (for key metrics)
 friendly_names = {
