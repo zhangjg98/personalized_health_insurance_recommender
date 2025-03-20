@@ -13,10 +13,11 @@ function App() {
     family_size: "",
     chronic_condition: "no",
     medical_care_frequency: "Low",
-    preferred_plan_type: ""
+    preferred_plan_type: "",
+    priority: "", // Change to a single priority
   });
 
-  const [recommendation, setRecommendation] = useState(null);
+  const [recommendations, setRecommendations] = useState([]); // Update to handle multiple recommendations
   const [mlSummary, setMlSummary] = useState("");
   const [mlData, setMlData] = useState(null);
   const [outlierMessage, setOutlierMessage] = useState("");
@@ -24,6 +25,8 @@ function App() {
   const [tooltip, showTooltip] = useState(true);
   const [feedbackGiven, setFeedbackGiven] = useState(false); // Track if feedback has been given
   const [selectedFeedback, setSelectedFeedback] = useState(null); // Track selected feedback ("Yes" or "No")
+  const [selectedRecommendation, setSelectedRecommendation] = useState(""); // Track selected recommendation
+  const [specificFeedbackGiven, setSpecificFeedbackGiven] = useState(false); // Track specific feedback submission
 
   const handleChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
@@ -34,6 +37,7 @@ function App() {
     setError("");
     setFeedbackGiven(false); // Reset feedback state when a new recommendation is fetched
     setSelectedFeedback(null);
+    setSelectedRecommendation("");
 
     try {
       const payload = { ...formData, user_id: 1 }; // Use static user_id for now
@@ -50,7 +54,7 @@ function App() {
       }
 
       const data = await response.json();
-      setRecommendation(data.recommendation);
+      setRecommendations(data.recommendations || []); // Update to handle multiple recommendations
       setMlSummary(data.ml_summary);
       setMlData(data.ml_prediction);
       setOutlierMessage(data.outlier_message || "");
@@ -68,7 +72,7 @@ function App() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           user_id: 1, // Use static user_id for now
-          item_id: recommendation?.plan || "Unknown Plan", // Use the plan name as the item_id
+          item_id: selectedRecommendation || "General Feedback", // Log the selected recommendation or general feedback
           rating,
         }),
       });
@@ -84,6 +88,33 @@ function App() {
       setSelectedFeedback(rating === 5 ? "Yes" : "No"); // Set selected feedback
     } catch (err) {
       console.error('Error logging feedback:', err);
+    }
+  };
+
+  const logSpecificPlanFeedback = async () => {
+    if (!selectedRecommendation || specificFeedbackGiven) return; // Prevent logging without a selected recommendation
+
+    try {
+      const response = await fetch('/log_interaction', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          user_id: 1, // Use static user_id for now
+          item_id: selectedRecommendation, // Log the selected recommendation
+          rating: 5, // Assume positive feedback for the selected plan
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`Server error: ${response.status}`);
+      }
+
+      const data = await response.json();
+      console.log(data.message);
+
+      setSpecificFeedbackGiven(true); // Mark specific feedback as given
+    } catch (err) {
+      console.error('Error logging specific plan feedback:', err);
     }
   };
 
@@ -123,7 +154,7 @@ function App() {
     High: "red",
   };
 
-  useEffect(() => {}, [mlData, recommendation, mlSummary, outlierMessage]);
+  useEffect(() => {}, [mlData, recommendations, mlSummary, outlierMessage]);
 
   return (
     <Container className="mt-4">
@@ -286,17 +317,51 @@ function App() {
             </Form.Group>
           </Col>
         </Row>
+        <Row>
+          <Col md={12}>
+            <Form.Group controlId="formPriority">
+              <Form.Label>What is most important to you in a plan?</Form.Label>
+              <Form.Control
+                as="select"
+                name="priority"
+                value={formData.priority}
+                onChange={handleChange}
+              >
+                <option value="">Select a priority</option>
+                <option value="Low Premiums">Low Premiums</option>
+                <option value="Comprehensive Coverage">Comprehensive Coverage</option>
+                <option value="Preventive Care">Preventive Care</option>
+                <option value="Low Deductibles">Low Deductibles</option>
+              </Form.Control>
+            </Form.Group>
+          </Col>
+        </Row>
         <Button variant="primary" type="submit" className="mt-3">
           Get Recommendation
         </Button>
       </Form>
 
-      {recommendation && (
+      {recommendations.length > 0 && (
         <Card className="mt-4">
-          <Card.Header>Recommended Plan</Card.Header>
+          <Card.Header>Recommended Plans</Card.Header>
           <Card.Body>
-            <Card.Text>{recommendation.plan}</Card.Text>
-            <Card.Text><em>{recommendation.justification}</em></Card.Text>
+            {recommendations.map((rec, index) => (
+              <div key={index} className="mb-3">
+                {rec.priority === "insufficient_criteria" ? (
+                  <Alert variant="warning">
+                    {rec.justification}
+                  </Alert>
+                ) : (
+                  <>
+                    <Card.Text>
+                      <strong>{rec.priority === "strongly recommended" ? "Strongly Recommended:" : "Recommended:"}</strong> {rec.plan}
+                    </Card.Text>
+                    <Card.Text><em>{rec.justification}</em></Card.Text>
+                  </>
+                )}
+              </div>
+            ))}
+
             <div className="mt-3">
               <h5>Was this recommendation helpful?</h5>
               <Button
@@ -318,6 +383,32 @@ function App() {
                 No
               </Button>
             </div>
+
+            {selectedFeedback === "Yes" && recommendations.length > 1 && (
+              <div className="mt-3">
+                <h5>Which recommendation was most useful to you?</h5>
+                <Form.Select
+                  value={selectedRecommendation}
+                  onChange={(e) => setSelectedRecommendation(e.target.value)}
+                  disabled={specificFeedbackGiven}
+                >
+                  <option value="">Select a recommendation</option>
+                  {recommendations.map((rec, index) => (
+                    <option key={index} value={rec.plan}>
+                      {rec.plan}
+                    </option>
+                  ))}
+                </Form.Select>
+                <Button
+                  variant="primary"
+                  className="mt-3"
+                  onClick={logSpecificPlanFeedback} // Log feedback for the selected recommendation
+                  disabled={!selectedRecommendation || specificFeedbackGiven} // Disable after submission
+                >
+                  Submit Feedback
+                </Button>
+              </div>
+            )}
           </Card.Body>
         </Card>
       )}
