@@ -1,0 +1,13 @@
+plan,preferred_plan_type,rating
+2,PPO,5.0
+4,HMO,5.0
+5,HMO,5.0
+6,HMO,5.0
+7,HMO,5.0
+8,HMO,5.0
+9,HMO,5.0
+10,HMO,5.0
+11,HMO,5.0
+1,HMO,4.5
+3,EPO,4.0
+2,HMO,3.5
