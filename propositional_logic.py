@@ -1,5 +1,7 @@
 import pandas as pd
 import os
+from database import db, Item  # Import db and Item from database.py
+
 # Description: This file contains the propositional logic for the insurance recommender system.
 
 # Recommendation function
@@ -204,19 +206,37 @@ def recommend_plan(user_input, priority=""):
 
     # Fallback: Recommend the highest-rated plan if no recommendations exist
     if not recommendations:
-        if os.path.exists("plan_feedback_analysis.csv"):
-            plan_feedback = pd.read_csv("plan_feedback_analysis.csv")
-            highest_rated_plan = plan_feedback.sort_values(by="rating", ascending=False).iloc[0]
-            recommendations.append({
-                "plan": highest_rated_plan["plan"],
-                "justification": "This plan is highly rated by other users and may suit your needs.",
-                "priority": "fallback"
-            })
-        else:
-            recommendations.append({
-                "plan": None,  # No plan to recommend
-                "justification": "Please select more criteria so that we can produce a meaningful recommendation.",
-                "priority": "insufficient_criteria"
-            })
+        # Commented out the highest-rated plan fallback logic
+        # if os.path.exists("plan_feedback_analysis.csv"):
+        #     plan_feedback = pd.read_csv("plan_feedback_analysis.csv")
+        #     highest_rated_plan_id = plan_feedback.sort_values(by="rating", ascending=False).iloc[0]["plan"]
+
+        #     # Fetch the plan name from the `items` table
+        #     highest_rated_plan = db.session.query(Item).filter_by(id=highest_rated_plan_id).first()
+
+        #     if highest_rated_plan:
+        #         recommendations.append({
+        #             "plan": highest_rated_plan.name,  # Use the actual plan name
+        #             "justification": "This plan is highly rated by other users and may suit your needs.",
+        #             "priority": "fallback"
+        #         })
+        #     else:
+        #         recommendations.append({
+        #             "plan": "No plan available",  # Fallback if the plan name cannot be retrieved
+        #             "justification": "Please select more criteria so that we can produce a meaningful recommendation.",
+        #             "priority": "insufficient_criteria"
+        #         })
+        # else:
+        recommendations.append({
+            "plan": "No plan available",  # Replace None with a valid string
+            "justification": "Please select more criteria so that we can produce a meaningful recommendation.",
+            "priority": "insufficient_criteria"
+        })
+
+    # Convert all values in recommendations to standard Python types
+    for rec in recommendations:
+        rec["plan"] = str(rec["plan"])  # Ensure plan is a string
+        rec["justification"] = str(rec["justification"])  # Ensure justification is a string
+        rec["priority"] = str(rec["priority"])  # Ensure priority is a string
 
     return recommendations
