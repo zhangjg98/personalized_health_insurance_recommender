@@ -1,14 +1,26 @@
 import pandas as pd
-from flask_backend import app, db, Interaction
+from flask_backend import app, db, Interaction, User
 
 def analyze_feedback():
     with app.app_context():
-        interactions = Interaction.query.all()
-        data = [(i.item_id, i.rating) for i in interactions]
-        df = pd.DataFrame(data, columns=['plan', 'rating'])
+        # Ensure the database engine is properly initialized
+        if db.session.bind is None:
+            db.engine.dispose()  # Dispose of any existing connections
+            db.session.bind = db.engine  # Rebind the session to the engine
 
-        # Calculate average rating for each plan
-        plan_feedback = df.groupby('plan')['rating'].mean().reset_index()
+        interactions = Interaction.query.all()
+        data = [(i.item_id, i.rating, i.user_id) for i in interactions]
+        df = pd.DataFrame(data, columns=['plan', 'rating', 'user_id'])
+
+        # Use SQLAlchemy engine to read the User table
+        sql_query = str(User.query.statement)  # Convert the SQLAlchemy statement to a string
+        users = pd.read_sql(sql_query, con=db.session.bind)
+
+        # Join with user preferences to include preferred plan type
+        df = df.merge(users[['id', 'preferred_plan_type']], left_on='user_id', right_on='id', how='left')
+
+        # Calculate average rating for each plan and preferred plan type
+        plan_feedback = df.groupby(['plan', 'preferred_plan_type'])['rating'].mean().reset_index()
         plan_feedback = plan_feedback.sort_values(by='rating', ascending=False)
 
         # Save feedback analysis to a CSV file
