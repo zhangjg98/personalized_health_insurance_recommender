@@ -134,33 +134,9 @@ def recommend():
                 "ncf_recommendations": ncf_recommendations,
             })
 
-        # Load raw values from processed_user_item_matrix.csv
-        raw_data = pd.read_csv("processed_user_item_matrix.csv", index_col=0)
-        if state not in raw_data.index:
-            return jsonify({
-                "recommendation": rule_recommendation,
-                "ml_prediction": ml_output_json,
-                "ml_summary": f"No data available for state: {state}.",
-                "outlier_message": "",
-                "ncf_recommendations": ncf_recommendations,
-            })
-
-        state_data = raw_data.loc[state]
-        print(f"Raw data for {state}:\n{state_data}")
-
-        # Classify raw values for outlier information
-        classifications = {}
-        for key, friendly_name in friendly_names.items():
-            if key in dynamic_thresholds and key in state_data:
-                value = state_data[key]
-                classification = classify_value(value, dynamic_thresholds[key])
-                classifications[friendly_name] = classification
-                print(f"Processing {friendly_name}: Value={value}, Classification={classification}")
-
-        # Generate ML predictions
+        # Generate ML predictions (trained data)
         ml_prediction_df = predict_medicare_spending(state)
         print("ML Prediction DataFrame:\n", ml_prediction_df)
-        ml_prediction_df = ml_prediction_df.rename(columns=friendly_names)
 
         # Add classification labels to ML predictions
         for key, friendly_name in friendly_names.items():
@@ -210,23 +186,26 @@ def recommend():
             "These factors suggest that you should consider plans that balance cost and benefits accordingly."
         )
 
-        # Generate outlier information based on raw data
-        outlier_row = state_summary[state_summary["State"] == state]
-        if not outlier_row.empty:
-            high_count = outlier_row["High Count"].iloc[0]
-            low_count = outlier_row["Low Count"].iloc[0]
+        # Generate Outlier Information using trained data
+        classifications = {}
+        for key, friendly_name in friendly_names.items():
+            if friendly_name in ml_prediction_df.columns:
+                value = ml_prediction_df[friendly_name].iloc[0]
+                classification = classify_value(value, dynamic_thresholds[key])
+                classifications[friendly_name] = classification
 
-            # Identify specific metrics classified as "High" or "Low"
-            high_metrics = [k for k, v in classifications.items() if v == "High"]
+        high_count = sum(1 for v in classifications.values() if v == "High")
+        low_count = sum(1 for v in classifications.values() if v == "Low")
+
+        # Construct a detailed outlier message
+        outlier_message = f"Note: {state} has {high_count} 'High' classifications and {low_count} 'Low' classifications. "
+        if low_count > 0:
             low_metrics = [k for k, v in classifications.items() if v == "Low"]
-
-            # Construct a detailed outlier message
-            outlier_message = f"Note: {state} has {high_count} 'High' classifications and {low_count} 'Low' classifications. "
-            if high_metrics:
-                outlier_message += f"Metrics classified as 'High': {', '.join(high_metrics)}. "
-            if low_metrics:
-                outlier_message += f"Metrics classified as 'Low': {', '.join(low_metrics)}."
-            print(f"Outlier message for {state}: {outlier_message}")
+            outlier_message += f"Metrics classified as 'Low': {', '.join(low_metrics)}. "
+        if high_count > 0:
+            high_metrics = [k for k, v in classifications.items() if v == "High"]
+            outlier_message += f"Metrics classified as 'High': {', '.join(high_metrics)}."
+        print(f"Outlier message for {state}: {outlier_message}")
 
         # Generate NeuralCollaborativeFiltering recommendations
         if 0 <= user_id < USER_ITEM_MATRIX.shape[0]:
