@@ -40,6 +40,9 @@ csv_path = "processed_user_item_matrix.csv"
 df = pd.read_csv(csv_path, index_col=0)
 states = df.index.tolist()
 
+# Load the "National" row for comparison
+national_data = pd.read_csv(csv_path, index_col=0).loc["National"]
+
 # Classify each state using the trained data
 classification_results = []
 for state in states:
@@ -56,6 +59,19 @@ for state in states:
             value = predicted_df[friendly_name].iloc[0]
             classification = classify_value(value, key)
             state_classification[friendly_name] = classification
+
+    # Add comparisons to national averages
+    for key, friendly_name in friendly_names.items():
+        if friendly_name in predicted_df.columns:
+            state_value = predicted_df[friendly_name].iloc[0]
+            national_value = national_data[key]
+            if state_value > national_value:
+                comparison = "above the national average"
+            elif state_value < national_value:
+                comparison = "below the national average"
+            else:
+                comparison = "on par with the national average"
+            state_classification[f"{friendly_name} Comparison"] = comparison
 
     classification_results.append(state_classification)
 
