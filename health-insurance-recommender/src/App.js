@@ -14,10 +14,10 @@ function App() {
     chronic_condition: "no",
     medical_care_frequency: "Low",
     preferred_plan_type: "",
-    priority: "", // Change to a single priority
+    priority: "",
   });
 
-  const [recommendations, setRecommendations] = useState([]); // Update to handle multiple recommendations
+  const [recommendations, setRecommendations] = useState([]);
   const [mlSummary, setMlSummary] = useState("");
   const [mlData, setMlData] = useState(null);
   const [outlierMessage, setOutlierMessage] = useState("");
@@ -357,6 +357,11 @@ function App() {
                       <strong>{rec.priority === "strongly recommended" ? "Strongly Recommended:" : "Recommended:"}</strong> {rec.plan}
                     </Card.Text>
                     <Card.Text><em>{rec.justification}</em></Card.Text>
+                    {formData.preferred_plan_type && rec.plan.includes(formData.preferred_plan_type) && (
+                      <Alert variant="info">
+                        This recommendation matches your preferred plan type: {formData.preferred_plan_type}.
+                      </Alert>
+                    )}
                   </>
                 )}
               </div>
