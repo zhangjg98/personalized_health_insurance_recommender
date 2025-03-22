@@ -74,6 +74,7 @@ function App() {
           user_id: 1, // Use static user_id for now
           item_id: selectedRecommendation || "General Feedback", // Log the selected recommendation or general feedback
           rating,
+          user_inputs: formData, // Include formData as user_inputs
         }),
       });
 
@@ -102,6 +103,7 @@ function App() {
           user_id: 1, // Use static user_id for now
           item_id: selectedRecommendation, // Log the selected recommendation
           rating: 5, // Assume positive feedback for the selected plan
+          user_inputs: formData, // Include formData as user_inputs
         }),
       });
 
