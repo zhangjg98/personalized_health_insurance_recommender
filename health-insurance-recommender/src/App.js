@@ -165,7 +165,7 @@ function App() {
           <Col md={4}>
             <Form.Group controlId="formAge">
               <Form.Label>Age Range:</Form.Label>
-              <Form.Control as="select" name="age" value={formData.age} onChange={handleChange}>
+              <Form.Control as="select" name="age" value={formData.age} onChange={handleChange} className="custom-dropdown">
                 <option value="young_adult">18-29</option>
                 <option value="adult">30-59</option>
                 <option value="senior">60+</option>
@@ -175,7 +175,7 @@ function App() {
           <Col md={4}>
             <Form.Group controlId="formSmoker">
               <Form.Label>Are you a smoker?</Form.Label>
-              <Form.Control as="select" name="smoker" value={formData.smoker} onChange={handleChange}>
+              <Form.Control as="select" name="smoker" value={formData.smoker} onChange={handleChange} className="custom-dropdown">
                 <option value="no">No</option>
                 <option value="yes">Yes</option>
               </Form.Control>
@@ -184,7 +184,7 @@ function App() {
           <Col md={4}>
             <Form.Group controlId="formState">
               <Form.Label>State (optional):</Form.Label>
-              <Form.Control as="select" name="state" value={formData.state} onChange={handleChange}>
+              <Form.Control as="select" name="state" value={formData.state} onChange={handleChange} className="custom-dropdown">
                 <option value="">Prefer not to say</option>
                 <option value="AL">Alabama</option>
                 <option value="AK">Alaska</option>
@@ -246,7 +246,7 @@ function App() {
           <Col md={4}>
             <Form.Group controlId="formBmi">
               <Form.Label>BMI Range (optional):</Form.Label>
-              <Form.Control as="select" name="bmi" value={formData.bmi} onChange={handleChange}>
+              <Form.Control as="select" name="bmi" value={formData.bmi} onChange={handleChange} className="custom-dropdown">
                 <option value="">Prefer not to say</option>
                 <option value="underweight">(&lt;18.5)</option>
                 <option value="normal">(18.5–24.9)</option>
@@ -258,7 +258,7 @@ function App() {
           <Col md={4}>
             <Form.Group controlId="formIncome">
               <Form.Label>Annual Income (optional):</Form.Label>
-              <Form.Control as="select" name="income" value={formData.income} onChange={handleChange}>
+              <Form.Control as="select" name="income" value={formData.income} onChange={handleChange} className="custom-dropdown">
                 <option value="">Prefer not to say</option>
                 <option value="below_30000">Below $30,000</option>
                 <option value="30000_to_74999">$30,000–$74,999</option>
@@ -270,7 +270,7 @@ function App() {
           <Col md={4}>
             <Form.Group controlId="formFamilySize">
               <Form.Label>Family Size (optional):</Form.Label>
-              <Form.Control as="select" name="family_size" value={formData.family_size} onChange={handleChange}>
+              <Form.Control as="select" name="family_size" value={formData.family_size} onChange={handleChange} className="custom-dropdown">
                 <option value="">Prefer not to say</option>
                 <option value="1">1 person</option>
                 <option value="2_to_3">2–3 people</option>
@@ -283,7 +283,7 @@ function App() {
           <Col md={4}>
             <Form.Group controlId="formChronicCondition">
               <Form.Label>Chronic Condition?</Form.Label>
-              <Form.Control as="select" name="chronic_condition" value={formData.chronic_condition} onChange={handleChange}>
+              <Form.Control as="select" name="chronic_condition" value={formData.chronic_condition} onChange={handleChange} className="custom-dropdown">
                 <option value="no">No</option>
                 <option value="yes">Yes</option>
               </Form.Control>
@@ -292,7 +292,7 @@ function App() {
           <Col md={4}>
             <Form.Group controlId="formMedicalCareFrequency">
               <Form.Label>How often do you need medical visits?</Form.Label>
-              <Form.Control as="select" name="medical_care_frequency" value={formData.medical_care_frequency} onChange={handleChange}>
+              <Form.Control as="select" name="medical_care_frequency" value={formData.medical_care_frequency} onChange={handleChange} className="custom-dropdown">
                 <option value="Low">Rarely</option>
                 <option value="Moderate">Sometimes</option>
                 <option value="High">Often</option>
@@ -307,6 +307,7 @@ function App() {
                 name="preferred_plan_type"
                 value={formData.preferred_plan_type}
                 onChange={handleChange}
+                className="custom-dropdown"
               >
                 <option value="">Select a plan type</option>
                 <option value="HMO">HMO</option>
@@ -326,6 +327,7 @@ function App() {
                 name="priority"
                 value={formData.priority}
                 onChange={handleChange}
+                className="custom-dropdown"
               >
                 <option value="">Select a priority</option>
                 <option value="Low Premiums">Low Premiums</option>
@@ -402,6 +404,7 @@ function App() {
                   value={selectedRecommendation}
                   onChange={(e) => setSelectedRecommendation(e.target.value)}
                   disabled={specificFeedbackGiven}
+                  className="custom-dropdown"
                 >
                   <option value="">Select a recommendation</option>
                   {recommendations.map((rec, index) => (
