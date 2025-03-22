@@ -34,3 +34,22 @@ class UserItemMatrix(db.Model):
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'), primary_key=True)
     item_id = db.Column(db.Integer, db.ForeignKey('items.id'), primary_key=True)
     rating = db.Column(db.Float)
+
+def clear_database():
+    """
+    Utility function to drop all tables in the database.
+    WARNING: This will delete all data in the database.
+    """
+    with db.engine.connect() as connection:
+        transaction = connection.begin()
+        try:
+            # Disable foreign key checks to avoid constraint issues
+            connection.execute("SET session_replication_role = 'replica';")
+            for table in reversed(db.metadata.sorted_tables):
+                connection.execute(f"TRUNCATE TABLE {table.name} CASCADE;")
+            connection.execute("SET session_replication_role = 'origin';")
+            transaction.commit()
+            print("Database cleared successfully.")
+        except Exception as e:
+            transaction.rollback()
+            print(f"Error clearing database: {e}")
