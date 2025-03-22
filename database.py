@@ -1,4 +1,6 @@
 from flask_sqlalchemy import SQLAlchemy
+from sqlalchemy.dialects.postgresql import JSON
+from sqlalchemy.sql import text
 
 db = SQLAlchemy()
 
@@ -28,6 +30,7 @@ class Interaction(db.Model):
     item_id = db.Column(db.Integer, db.ForeignKey('items.id'))
     rating = db.Column(db.Float)
     timestamp = db.Column(db.DateTime, default=db.func.current_timestamp())
+    user_inputs = db.Column(JSON)  # Store user inputs as JSON
 
 class UserItemMatrix(db.Model):
     __tablename__ = 'user_item_matrix'
@@ -37,19 +40,22 @@ class UserItemMatrix(db.Model):
 
 def clear_database():
     """
-    Utility function to drop all tables in the database.
+    Utility function to drop all tables in the database and recreate them.
     WARNING: This will delete all data in the database.
     """
     with db.engine.connect() as connection:
         transaction = connection.begin()
         try:
-            # Disable foreign key checks to avoid constraint issues
-            connection.execute("SET session_replication_role = 'replica';")
-            for table in reversed(db.metadata.sorted_tables):
-                connection.execute(f"TRUNCATE TABLE {table.name} CASCADE;")
-            connection.execute("SET session_replication_role = 'origin';")
+            # Drop all tables
+            print("Dropping all tables...")
+            db.metadata.drop_all(bind=connection)
+
+            # Recreate all tables
+            print("Recreating all tables...")
+            db.metadata.create_all(bind=connection)
+
             transaction.commit()
-            print("Database cleared successfully.")
+            print("Database cleared and recreated successfully.")
         except Exception as e:
             transaction.rollback()
             print(f"Error clearing database: {e}")
