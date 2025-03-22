@@ -86,42 +86,6 @@ def compute_composite_ml_score(spending, risk, er_rate, thresholds):
     composite_score = np.mean(list(scores.values()))
     return composite_score, scores
 
-def generate_user_friendly_summary(composite_score, individual_scores, comparisons):
-    """
-    Generate a user-friendly summary based on the composite score and individual metric scores.
-
-    Parameters:
-        composite_score (float): The overall composite ML score.
-        individual_scores (dict): Scores for individual metrics (e.g., spending, risk, ER visits).
-        comparisons (dict): Comparisons to national averages for each metric.
-
-    Returns:
-        str: A user-friendly summary of the state-level analysis.
-    """
-    # Classify the composite score
-    if composite_score > 0.7:
-        overall_classification = "High"
-        overall_message = "Your state has high spending and risk, suggesting you should consider comprehensive coverage."
-    elif composite_score < 0.3:
-        overall_classification = "Low"
-        overall_message = "Your state has low spending and risk, suggesting affordable plans with lower premiums may be suitable."
-    else:
-        overall_classification = "Moderate"
-        overall_message = "Your state has moderate spending and risk, suggesting balanced plans may be a good fit."
-
-    # Build a detailed breakdown for individual metrics
-    detailed_breakdown = []
-    for metric, score in individual_scores.items():
-        classification = "High" if score > 0.7 else "Low" if score < 0.3 else "Moderate"
-        comparison = comparisons.get(metric, "")
-        detailed_breakdown.append(
-            f"{metric}: {classification} ({comparison})"
-        )
-
-    # Combine the overall message with the detailed breakdown
-    summary = f"{overall_message} Key metrics:\n" + "\n".join(detailed_breakdown)
-    return summary
-
 @app.route('/recommend', methods=['POST'])
 def recommend():
     try:
