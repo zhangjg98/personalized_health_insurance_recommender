@@ -6,6 +6,7 @@ from ml_model import predict_medicare_spending
 from thresholds import compute_dynamic_thresholds, unified_thresholds
 from neural_collaborative_filtering import load_ncf_model, predict_user_item_interactions
 import pandas as pd
+import numpy as np
 
 app = Flask(__name__)
 CORS(app)
@@ -66,6 +67,61 @@ def classify_value(value, thresholds):
         return "Moderate"
     return "Low" if value < mid else "High"
 
+def compute_composite_ml_score(spending, risk, er_rate, thresholds):
+    """
+    Compute a composite score using normalized distances from the threshold midpoints.
+    The score is an average of the normalized distances (between 0 and 1).
+    """
+    scores = {}
+    for key, value in zip(["TOT_MDCR_STDZD_PYMT_PC", "BENE_AVG_RISK_SCRE", "ER_VISITS_PER_1000_BENES"],
+                           [spending, risk, er_rate]):
+        thresh = thresholds[key]
+        midpoint = (thresh["low"] + thresh["high"]) / 2.0
+        # Compute absolute distance normalized by the range
+        norm_distance = abs(value - midpoint) / (thresh["high"] - thresh["low"])
+        # Clip between 0 and 1 for safety
+        norm_distance = np.clip(norm_distance, 0, 1)
+        scores[key] = norm_distance
+    # Composite score is the average of these distances.
+    composite_score = np.mean(list(scores.values()))
+    return composite_score, scores
+
+def generate_user_friendly_summary(composite_score, individual_scores, comparisons):
+    """
+    Generate a user-friendly summary based on the composite score and individual metric scores.
+
+    Parameters:
+        composite_score (float): The overall composite ML score.
+        individual_scores (dict): Scores for individual metrics (e.g., spending, risk, ER visits).
+        comparisons (dict): Comparisons to national averages for each metric.
+
+    Returns:
+        str: A user-friendly summary of the state-level analysis.
+    """
+    # Classify the composite score
+    if composite_score > 0.7:
+        overall_classification = "High"
+        overall_message = "Your state has high spending and risk, suggesting you should consider comprehensive coverage."
+    elif composite_score < 0.3:
+        overall_classification = "Low"
+        overall_message = "Your state has low spending and risk, suggesting affordable plans with lower premiums may be suitable."
+    else:
+        overall_classification = "Moderate"
+        overall_message = "Your state has moderate spending and risk, suggesting balanced plans may be a good fit."
+
+    # Build a detailed breakdown for individual metrics
+    detailed_breakdown = []
+    for metric, score in individual_scores.items():
+        classification = "High" if score > 0.7 else "Low" if score < 0.3 else "Moderate"
+        comparison = comparisons.get(metric, "")
+        detailed_breakdown.append(
+            f"{metric}: {classification} ({comparison})"
+        )
+
+    # Combine the overall message with the detailed breakdown
+    summary = f"{overall_message} Key metrics:\n" + "\n".join(detailed_breakdown)
+    return summary
+
 @app.route('/recommend', methods=['POST'])
 def recommend():
     try:
@@ -87,123 +143,140 @@ def recommend():
         outlier_message = ""
         ncf_recommendations = []
 
-        # Validate input
-        if not state:
-            return jsonify({
-                "recommendations": recommendations,  # Return multiple recommendations
-                "ml_prediction": ml_output_json,
-                "ml_summary": "No state provided. Unable to generate state-level analysis.",
-                "outlier_message": "",
-                "ncf_recommendations": ncf_recommendations,
-            })
+        # Generate ML predictions and insights only if a state is provided
+        if state:
+            # Load the "National" row for comparison
+            national_data = pd.read_csv("processed_user_item_matrix.csv", index_col=0).loc["National"]
 
-        # Load the "National" row for comparison
-        national_data = pd.read_csv("processed_user_item_matrix.csv", index_col=0).loc["National"]
+            # Generate ML predictions (trained data)
+            ml_prediction_df = predict_medicare_spending(state)
+            print("ML Prediction DataFrame:\n", ml_prediction_df)
 
-        # Generate ML predictions (trained data)
-        ml_prediction_df = predict_medicare_spending(state)
-        print("ML Prediction DataFrame:\n", ml_prediction_df)
+            # Add classification labels to ML predictions
+            for key, friendly_name in friendly_names.items():
+                if friendly_name in ml_prediction_df.columns:
+                    ml_prediction_df[f"{friendly_name} Level"] = ml_prediction_df[friendly_name].apply(
+                        lambda x: classify_value(x, dynamic_thresholds[key])
+                    )
 
-        # Add classification labels to ML predictions
-        for key, friendly_name in friendly_names.items():
-            if friendly_name in ml_prediction_df.columns:
-                ml_prediction_df[f"{friendly_name} Level"] = ml_prediction_df[friendly_name].apply(
-                    lambda x: classify_value(x, dynamic_thresholds[key])
-                )
+            # Add comparisons to national averages
+            comparisons = {}
+            for key, friendly_name in friendly_names.items():
+                if friendly_name in ml_prediction_df.columns:
+                    state_value = ml_prediction_df[friendly_name].iloc[0]
+                    national_value = national_data[key]
+                    if state_value > national_value:
+                        comparison = "It is above the national average."
+                    elif state_value < national_value:
+                        comparison = "It is below the national average."
+                    else:
+                        comparison = "It is on par with the national average."
+                    comparisons[friendly_name] = comparison
 
-        # Add comparisons to national averages
-        comparisons = {}
-        for key, friendly_name in friendly_names.items():
-            if friendly_name in ml_prediction_df.columns:
-                state_value = ml_prediction_df[friendly_name].iloc[0]
-                national_value = national_data[key]
-                if state_value > national_value:
-                    comparison = "It is above the national average."
-                elif state_value < national_value:
-                    comparison = "It is below the national average."
-                else:
-                    comparison = "It is on par with the national average."
-                comparisons[friendly_name] = comparison
+            # Include comparisons in the response
+            ml_output_json = ml_prediction_df.to_dict(orient="records")
+            for metric, comparison in comparisons.items():
+                ml_output_json[0][f"{metric} Comparison"] = comparison
 
-        # Include comparisons in the response
-        ml_output_json = ml_prediction_df.to_dict(orient="records")
-        for metric, comparison in comparisons.items():
-            ml_output_json[0][f"{metric} Comparison"] = comparison
-
-        # Add clarification message with percentage thresholds
-        clarification_message = (
-            "The classification (e.g., 'Moderate') is based on thresholds derived from state-level data, "
-            "specifically the 10th to 90th percentiles. Values within this range are classified as 'Moderate'. "
-            "The comparison (e.g., 'above the national average') is relative to the national average, "
-            "calculated as the mean of all state values."
-        )
-
-        # Add clarification message for predicted values
-        prediction_context_message = (
-            "The values shown in 'Predicted Medicare Spending Details' are predictions based on historical data "
-            "and trained machine learning models. These predictions aim to provide insights into state-level trends "
-            "and are not exact measurements."
-        )
-
-        # Build summary messages based on ML predictions
-        spending = ml_prediction_df["Standardized Medicare Payment per Capita"].iloc[0]
-        risk = ml_prediction_df["Average Health Risk Score"].iloc[0]
-        er_rate = ml_prediction_df["Emergency Department Visit Rate (per 1,000 beneficiaries)"].iloc[0]
-
-        spending_classification = classify_value(spending, dynamic_thresholds["TOT_MDCR_STDZD_PYMT_PC"])
-        risk_classification = classify_value(risk, dynamic_thresholds["BENE_AVG_RISK_SCRE"])
-        er_rate_classification = classify_value(er_rate, dynamic_thresholds["ER_VISITS_PER_1000_BENES"])
-
-        if recommendations and recommendations[0]["plan"] is not None:  # Ensure the plan is not None
-            if spending_classification == "High":
-                spending_text = "high spending"
-                recommendations[0]["plan"] += " (Given high state spending, consider comprehensive coverage.)"
-            elif spending_classification == "Low":
-                spending_text = "low spending"
-                recommendations[0]["plan"] += " (Given low state spending, consider plans with lower premiums.)"
-            else:
-                spending_text = "moderate spending"
-                recommendations[0]["plan"] += " (State spending levels appear moderate.)"
-
-            if risk_classification == "High":
-                risk_text = "a higher-than-average risk profile"
-            elif risk_classification == "Low":
-                risk_text = "a lower-than-average risk profile"
-            else:
-                risk_text = "an average risk profile"
-
-            if er_rate_classification == "High":
-                er_text = "a high rate of emergency visits"
-            elif er_rate_classification == "Low":
-                er_text = "a low rate of emergency visits"
-            else:
-                er_text = "a moderate rate of emergency visits"
-
-            ml_summary = (
-                f"State-level analysis indicates {spending_text}, with {risk_text} and {er_text}. "
-                "These factors suggest that you should consider plans that balance cost and benefits accordingly."
+            # Add clarification message with percentage thresholds
+            clarification_message = (
+                "The classification (e.g., 'Moderate') is based on thresholds derived from state-level data, "
+                "specifically the 10th to 90th percentiles. Values within this range are classified as 'Moderate'. "
+                "The comparison (e.g., 'above the national average') is relative to the national average, "
+                "calculated as the mean of all state values."
             )
 
-        # Generate Outlier Information using trained data
-        classifications = {}
-        for key, friendly_name in friendly_names.items():
-            if friendly_name in ml_prediction_df.columns:
-                value = ml_prediction_df[friendly_name].iloc[0]
-                classification = classify_value(value, dynamic_thresholds[key])
-                classifications[friendly_name] = classification
+            # Add clarification message for predicted values
+            prediction_context_message = (
+                "The values shown in 'Predicted Medicare Spending Details' are predictions based on historical data "
+                "and trained machine learning models. These predictions aim to provide insights into state-level trends "
+                "and are not exact measurements."
+            )
 
-        high_count = sum(1 for v in classifications.values() if v == "High")
-        low_count = sum(1 for v in classifications.values() if v == "Low")
+            # Build summary messages based on ML predictions
+            spending = ml_prediction_df["Standardized Medicare Payment per Capita"].iloc[0]
+            risk = ml_prediction_df["Average Health Risk Score"].iloc[0]
+            er_rate = ml_prediction_df["Emergency Department Visit Rate (per 1,000 beneficiaries)"].iloc[0]
 
-        # Construct a detailed outlier message
-        outlier_message = f"Note: {state} has {high_count} 'High' classifications and {low_count} 'Low' classifications. "
-        if low_count > 0:
-            low_metrics = [k for k, v in classifications.items() if v == "Low"]
-            outlier_message += f"Metrics classified as 'Low': {', '.join(low_metrics)}. "
-        if high_count > 0:
-            high_metrics = [k for k, v in classifications.items() if v == "High"]
-            outlier_message += f"Metrics classified as 'High': {', '.join(high_metrics)}."
-        print(f"Outlier message for {state}: {outlier_message}")
+            spending_classification = classify_value(spending, dynamic_thresholds["TOT_MDCR_STDZD_PYMT_PC"])
+            risk_classification = classify_value(risk, dynamic_thresholds["BENE_AVG_RISK_SCRE"])
+            er_rate_classification = classify_value(er_rate, dynamic_thresholds["ER_VISITS_PER_1000_BENES"])
+
+            # Compute Composite ML Score
+            composite_score, _ = compute_composite_ml_score(
+                spending, risk, er_rate, {
+                    "TOT_MDCR_STDZD_PYMT_PC": dynamic_thresholds["TOT_MDCR_STDZD_PYMT_PC"],
+                    "BENE_AVG_RISK_SCRE": dynamic_thresholds["BENE_AVG_RISK_SCRE"],
+                    "ER_VISITS_PER_1000_BENES": dynamic_thresholds["ER_VISITS_PER_1000_BENES"],
+                }
+            )
+
+            # Build dynamic summary messages based on classifications
+            messages = []
+
+            # Spending message
+            if spending_classification == "High":
+                messages.append("high spending levels")
+                if recommendations and recommendations[0]["plan"] is not None:
+                    recommendations[0]["plan"] += " (Given high state spending, consider comprehensive coverage.)"
+            elif spending_classification == "Low":
+                messages.append("low spending levels")
+                if recommendations and recommendations[0]["plan"] is not None:
+                    recommendations[0]["plan"] += " (Given low state spending, consider plans with lower premiums.)"
+            else:
+                messages.append("moderate spending levels")
+                if recommendations and recommendations[0]["plan"] is not None:
+                    recommendations[0]["plan"] += " (State spending levels appear moderate.)"
+
+            # Risk message
+            if risk_classification == "High":
+                messages.append("a higher-than-average risk profile")
+            elif risk_classification == "Low":
+                messages.append("a lower-than-average risk profile")
+            else:
+                messages.append("an average risk profile")
+
+            # Emergency department visit rate message
+            if er_rate_classification == "High":
+                messages.append("a high rate of emergency visits")
+            elif er_rate_classification == "Low":
+                messages.append("a low rate of emergency visits")
+            else:
+                messages.append("a moderate rate of emergency visits")
+
+            # Create the primary summary sentence
+            primary_summary = "State-level analysis indicates " + ", ".join(messages[:-1]) + ", and " + messages[-1] + "."
+
+            # Create a secondary sentence based on the combination of classifications
+            if spending_classification == "High" or risk_classification == "High" or er_rate_classification == "High":
+                secondary_summary = "These indicators suggest significant healthcare demand, so you might benefit from a plan with comprehensive coverage and lower deductibles."
+            elif spending_classification == "Low" and risk_classification == "Low" and er_rate_classification == "Low":
+                secondary_summary = "These indicators imply modest healthcare demand, so a plan with lower premiums and minimal coverage may be sufficient."
+            else:
+                secondary_summary = "Overall, the indicators are balanced, suggesting that a moderately comprehensive plan could be the most cost-effective choice."
+
+            ml_summary = f"{primary_summary} {secondary_summary}"
+
+            # Generate Outlier Information using trained data
+            classifications = {}
+            for key, friendly_name in friendly_names.items():
+                if friendly_name in ml_prediction_df.columns:
+                    value = ml_prediction_df[friendly_name].iloc[0]
+                    classification = classify_value(value, dynamic_thresholds[key])
+                    classifications[friendly_name] = classification
+
+            high_count = sum(1 for v in classifications.values() if v == "High")
+            low_count = sum(1 for v in classifications.values() if v == "Low")
+
+            # Construct a detailed outlier message
+            outlier_message = f"Note: {state} has {high_count} 'High' classifications and {low_count} 'Low' classifications. "
+            if low_count > 0:
+                low_metrics = [k for k, v in classifications.items() if v == "Low"]
+                outlier_message += f"Metrics classified as 'Low': {', '.join(low_metrics)}. "
+            if high_count > 0:
+                high_metrics = [k for k, v in classifications.items() if v == "High"]
+                outlier_message += f"Metrics classified as 'High': {', '.join(high_metrics)}."
+            print(f"Outlier message for {state}: {outlier_message}")
 
         # Generate NeuralCollaborativeFiltering recommendations
         if 0 <= user_id < USER_ITEM_MATRIX.shape[0]:
@@ -212,17 +285,30 @@ def recommend():
             print(f"Invalid user_id: {user_id}")
             ncf_recommendations = []
 
+        # Ensure "Was this recommendation helpful?" does not appear if no valid plan is recommended
+        valid_recommendations = [
+            rec for rec in recommendations if rec.get("priority") != "insufficient_criteria"
+        ]
+
+        # If no valid recommendations exist, add a fallback warning message
+        if not valid_recommendations:
+            valid_recommendations = [{
+                "plan": "No plan available",
+                "justification": "Insufficient inputs provided. Please provide more information to generate meaningful recommendations.",
+                "priority": "warning"
+            }]
+
     except Exception as e:
         print(f"Error during recommendation: {e}")
         return jsonify({"error": str(e)}), 500
 
     return jsonify({
-        "recommendations": recommendations,  # Return multiple recommendations
+        "recommendations": valid_recommendations,  # Return recommendations, including fallback
         "ml_prediction": ml_output_json,
         "ml_summary": ml_summary,
-        "outlier_message": outlier_message,
-        "clarification_message": clarification_message,
-        "prediction_context_message": prediction_context_message,  # Add prediction context
+        "outlier_message": outlier_message,  # Include the outlier message
+        "clarification_message": clarification_message if state else "",
+        "prediction_context_message": prediction_context_message if state else "",
         "ncf_recommendations": ncf_recommendations,
     })
 
