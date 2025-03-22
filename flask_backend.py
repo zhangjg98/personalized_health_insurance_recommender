@@ -290,11 +290,24 @@ def log_interaction():
     user_id = data.get('user_id')
     item_name = data.get('item_id')  # Use the selected recommendation's plan name
     rating = data.get('rating')
+    user_inputs = data.get('user_inputs', {})  # Get user inputs from the request
+
+    # Check if the user exists in the `users` table
+    user = User.query.get(user_id)
+    if not user:
+        return jsonify({"error": f"User with id {user_id} does not exist."}), 400
+
+    # Handle fallback case where no recommendation is generated
+    if item_name == "General Feedback":
+        item_name = "No Recommendation Available"
+        item_description = "This feedback was provided when no specific recommendation was generated."
+    else:
+        item_description = "Recommended plan"
 
     # Ensure the item exists in the `items` table
     item = Item.query.filter_by(name=item_name).first()
     if not item:
-        item = Item(name=item_name, description="Recommended plan")
+        item = Item(name=item_name, description=item_description)
         db.session.add(item)
         db.session.commit()
 
@@ -302,7 +315,8 @@ def log_interaction():
     interaction = Interaction(
         user_id=user_id,
         item_id=item.id,
-        rating=rating
+        rating=rating,
+        user_inputs=user_inputs  # Store user inputs
     )
     db.session.add(interaction)
     db.session.commit()
@@ -324,5 +338,7 @@ def get_interactions():
     ]
     return jsonify(data)
 
-if __name__ == '__main__':
+if __name__ == "__main__":
+    with app.app_context():
+        create_tables()
     app.run(debug=True)
