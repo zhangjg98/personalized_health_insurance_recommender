@@ -209,36 +209,15 @@ def recommend_plan(user_input, priority=""):
 
     # Fallback: Recommend the highest-rated plan if no recommendations exist
     if not recommendations:
-        # Commented out the highest-rated plan fallback logic
-        # if os.path.exists("plan_feedback_analysis.csv"):
-        #     plan_feedback = pd.read_csv("plan_feedback_analysis.csv")
-        #     highest_rated_plan_id = plan_feedback.sort_values(by="rating", ascending=False).iloc[0]["plan"]
-
-        #     # Fetch the plan name from the `items` table
-        #     highest_rated_plan = db.session.query(Item).filter_by(id=highest_rated_plan_id).first()
-
-        #     if highest_rated_plan:
-        #         recommendations.append({
-        #             "plan": highest_rated_plan.name,  # Use the actual plan name
-        #             "justification": "This plan is highly rated by other users and may suit your needs.",
-        #             "priority": "fallback"
-        #         })
-        #     else:
-        #         recommendations.append({
-        #             "plan": "No plan available",  # Fallback if the plan name cannot be retrieved
-        #             "justification": "Please select more criteria so that we can produce a meaningful recommendation.",
-        #             "priority": "insufficient_criteria"
-        #         })
-        # else:
         recommendations.append({
-            "plan": "No plan available",  # Replace None with a valid string
+            "plan": None,  # Use None to indicate no valid plan
             "justification": "Please select more criteria so that we can produce a meaningful recommendation.",
             "priority": "insufficient_criteria"
         })
 
     # Convert all values in recommendations to standard Python types
     for rec in recommendations:
-        rec["plan"] = str(rec["plan"])  # Ensure plan is a string
+        rec["plan"] = str(rec["plan"]) if rec["plan"] else "No plan available"  # Ensure plan is a string or "No plan available"
         rec["justification"] = str(rec["justification"])  # Ensure justification is a string
         rec["priority"] = str(rec["priority"])  # Ensure priority is a string
 
