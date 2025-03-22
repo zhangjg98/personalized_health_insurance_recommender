@@ -347,7 +347,7 @@ function App() {
           <Card.Body>
             {recommendations.map((rec, index) => (
               <div key={index} className="mb-3">
-                {rec.priority === "insufficient_criteria" ? (
+                {rec.priority === "insufficient_criteria" || rec.priority === "warning" ? (
                   <Alert variant="warning">
                     {rec.justification}
                   </Alert>
@@ -367,9 +367,8 @@ function App() {
               </div>
             ))}
 
-            {/* Only show feedback section if no fallback recommendation is present */}
-            {recommendations.length > 0 &&
-              recommendations.every((rec) => rec.priority !== "insufficient_criteria") && (
+            {/* Show feedback section only if there are valid recommendations */}
+            {recommendations.some((rec) => rec.priority !== "insufficient_criteria" && rec.priority !== "warning") && (
               <div className="mt-3">
                 <h5>Was this recommendation helpful?</h5>
                 <Button
@@ -393,9 +392,10 @@ function App() {
               </div>
             )}
 
+            {/* Dropdown for selecting the most useful recommendation */}
             {selectedFeedback === "Yes" &&
               recommendations.length > 1 &&
-              recommendations.every((rec) => rec.priority !== "insufficient_criteria") && (
+              recommendations.some((rec) => rec.priority !== "insufficient_criteria" && rec.priority !== "warning") && (
               <div className="mt-3">
                 <h5>Which recommendation was most useful to you?</h5>
                 <Form.Select
