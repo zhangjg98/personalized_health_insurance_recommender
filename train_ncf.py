@@ -9,4 +9,4 @@ model = train_and_save_model(user_item_matrix, latent_dim=50, hidden_dim=128, ep
 
 # Evaluate the model
 mse, f1 = evaluate_model(model, user_item_matrix)
-print(f"Model Evaluation - MSE: {mse}, F1-score: {f1}")
+print(f"Model Evaluation - Mean Squared Error (MSE): {mse:.4f}, F1-score: {f1:.4f}")
