@@ -15,6 +15,8 @@ function App() {
     medical_care_frequency: "Low",
     preferred_plan_type: "",
     priority: "",
+    gender: "", // Add gender field
+    ethnicity: "", // Add ethnicity field
   });
 
   const [recommendations, setRecommendations] = useState([]);
@@ -321,7 +323,7 @@ function App() {
           </Col>
         </Row>
         <Row>
-          <Col md={12}>
+          <Col md={4}>
             <Form.Group controlId="formPriority">
               <Form.Label>What is most important to you in a plan? (optional):</Form.Label>
               <Form.Control
@@ -336,6 +338,41 @@ function App() {
                 <option value="Comprehensive Coverage">Comprehensive Coverage</option>
                 <option value="Preventive Care">Preventive Care</option>
                 <option value="Low Deductibles">Low Deductibles</option>
+              </Form.Control>
+            </Form.Group>
+          </Col>
+          <Col md={4}>
+            <Form.Group controlId="formGender">
+              <Form.Label>Gender (optional):</Form.Label>
+              <Form.Control
+                as="select"
+                name="gender"
+                value={formData.gender}
+                onChange={handleChange}
+                className="custom-dropdown"
+              >
+                <option value="">Prefer not to say</option>
+                <option value="female">Female</option>
+                <option value="male">Male</option>
+                <option value="other">Other</option>
+              </Form.Control>
+            </Form.Group>
+          </Col>
+          <Col md={4}>
+            <Form.Group controlId="formEthnicity">
+              <Form.Label>Ethnicity (optional):</Form.Label>
+              <Form.Control
+                as="select"
+                name="ethnicity"
+                value={formData.ethnicity}
+                onChange={handleChange}
+                className="custom-dropdown"
+              >
+                <option value="">Prefer not to say</option>
+                <option value="white">Non-Hispanic White</option>
+                <option value="black">African American</option>
+                <option value="hispanic">Hispanic</option>
+                <option value="other">Other</option>
               </Form.Control>
             </Form.Group>
           </Col>
