@@ -97,9 +97,16 @@ def recommend():
             return jsonify({"error": "Invalid user_id. Please ensure you are logged in or registered."}), 400
 
         priority = user_input.get("priority", "")  # Get a single priority
-        recommendations = recommend_plan(user_input, priority)  # Pass the single priority
-
         state = user_input.get('state', '').strip()
+
+        # Generate ML predictions and insights only if a state is provided
+        ml_prediction_df = None
+        if state:
+            ml_prediction_df = predict_medicare_spending(state)
+            print("ML Prediction DataFrame:\n", ml_prediction_df)
+
+        # Pass ML predictions to the recommendation logic
+        recommendations = recommend_plan(user_input, priority, ml_prediction_df)
 
         # Initialize variables with default values
         ml_output_json = []
@@ -111,10 +118,6 @@ def recommend():
         if state:
             # Load the "National" row for comparison
             national_data = pd.read_csv("processed_user_item_matrix.csv", index_col=0).loc["National"]
-
-            # Generate ML predictions (trained data)
-            ml_prediction_df = predict_medicare_spending(state)
-            print("ML Prediction DataFrame:\n", ml_prediction_df)
 
             # Add classification labels to ML predictions
             for key, friendly_name in friendly_names.items():
