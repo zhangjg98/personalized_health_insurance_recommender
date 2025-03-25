@@ -37,11 +37,16 @@ def compute_dynamic_thresholds(csv_path, keys, lower_quantile=0.25, upper_quanti
             print(f"Key {key} not found in CSV columns!")  # Debugging log
     return thresholds
 
-def unified_thresholds(csv_path, keys):
+def unified_thresholds(csv_path, keys, lower_quantile=0.1, upper_quantile=0.9, scale_factor=1.3):
     """
     Unified threshold calculation for all modules.
     """
-    return compute_dynamic_thresholds(csv_path, keys, lower_quantile=0.1, upper_quantile=0.9, scale_factor=1.3)
+    # Ensure `keys` is a list and not a method or invalid type
+    if not isinstance(keys, list):
+        raise ValueError(f"Expected 'keys' to be a list, but got {type(keys)} instead.")
+    if any(callable(key) for key in keys):
+        raise ValueError("One or more elements in 'keys' is a method or callable, which is invalid.")
+    return compute_dynamic_thresholds(csv_path, keys, lower_quantile, upper_quantile, scale_factor)
 
 if __name__ == "__main__":
     # Expanded list of variables for threshold calculations
