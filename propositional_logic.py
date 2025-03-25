@@ -2,11 +2,13 @@ import pandas as pd
 import os
 from database import db, Item  # Import db and Item from database.py
 from thresholds import unified_thresholds  # Import dynamic thresholds
+from ml_model import predict_medicare_spending  # Use trained data for thresholds
 
 # Description: This file contains the propositional logic for the insurance recommender system.
 
 # Recommendation function
 def recommend_plan(user_input, priority="", ml_prediction_df=None):
+    # Extract user inputs
     age_group = user_input.get('age', '18-29')
     smoker = user_input.get('smoker', 'no')
     bmi_category = user_input.get('bmi', '')
@@ -16,9 +18,21 @@ def recommend_plan(user_input, priority="", ml_prediction_df=None):
     medical_care_frequency = user_input.get('medical_care_frequency', 'Low')
     preferred_plan_type = user_input.get('preferred_plan_type', '')
     gender = user_input.get('gender', '')
-    ethnicity = user_input.get('ethnicity', '')
+    ethnicity = user_input.get('ethnicity', '').lower()
 
     recommendations = []
+
+    # Load dynamic thresholds for demographic fields based on predicted values
+    demographic_keys = ["BENE_FEML_PCT", "BENE_RACE_BLACK_PCT", "BENE_RACE_HSPNC_PCT"]
+    try:
+        demographic_thresholds = unified_thresholds("processed_user_item_matrix.csv", demographic_keys)
+
+        # Validate that demographic_thresholds is a dictionary
+        if not isinstance(demographic_thresholds, dict):
+            raise TypeError("Expected demographic_thresholds to be a dictionary.")
+    except Exception as e:
+        print(f"Error loading demographic thresholds: {e}")
+        demographic_thresholds = {}
 
     # High-priority rules (evaluated first)
     if smoker == "yes":
@@ -52,6 +66,46 @@ def recommend_plan(user_input, priority="", ml_prediction_df=None):
             recommendations.append({
                 "plan": "Plan Recommendation: Chronic Care Coverage",
                 "justification": "Chronic care coverage is a Medicare program that helps with chronic conditions. Services include a comprehensive care plan that lists your health problems and goals as well as provide needed medication and urgent care needs.",
+                "priority": "strongly recommended"
+            })
+
+    # Demographic-based recommendations (evaluated after high-priority rules)
+    try:
+        # Extract predicted demographic values
+        predicted_female = float(ml_prediction_df["Percent Female"].iloc[0])
+        predicted_black = float(ml_prediction_df["Percent African American"].iloc[0])
+        predicted_hispanic = float(ml_prediction_df["Percent Hispanic"].iloc[0])
+    except Exception as e:
+        # If demographic predictions are unavailable, skip these rules
+        predicted_female = predicted_black = predicted_hispanic = None
+
+    if predicted_female is not None:
+        female_thresholds = demographic_thresholds.get("BENE_FEML_PCT", {})
+        if isinstance(female_thresholds, dict) and "high" in female_thresholds and predicted_female > female_thresholds["high"]:
+            recommendations.append({
+                "plan": "Plan Recommendation: Consider Plans with Enhanced Women's Health Coverage",
+                "justification": "The predicted percentage of female beneficiaries is high. Consider plans that include robust maternity and women’s health services.",
+                "priority": "strongly recommended"
+            })
+
+    if predicted_black is not None:
+        black_thresholds = demographic_thresholds.get("BENE_RACE_BLACK_PCT", {})
+        if isinstance(black_thresholds, dict) and "high" in black_thresholds and predicted_black > black_thresholds["high"]:
+            recommendations.append({
+                "plan": "Plan Recommendation: Consider Plans with Preventive Care for Chronic Conditions",
+                "justification": "A higher predicted percentage of African American beneficiaries may indicate elevated risk for chronic conditions such as hypertension and diabetes. Plans with strong preventive care and chronic disease management are recommended.",
+                "priority": "strongly recommended"
+            })
+
+    if predicted_hispanic is not None:
+        hispanic_thresholds = demographic_thresholds.get("BENE_RACE_HSPNC_PCT", {})
+        if isinstance(hispanic_thresholds, dict) and "high" in hispanic_thresholds and predicted_hispanic > hispanic_thresholds["high"]:
+            justification = "A significant predicted Hispanic population suggests that plans offering bilingual support and culturally tailored services could be beneficial."
+            if ethnicity == "hispanic":
+                justification += " Additionally, since you identified as Hispanic, this recommendation aligns with your demographic needs."
+            recommendations.append({
+                "plan": "Plan Recommendation: Consider Plans Offering Culturally Relevant Healthcare Services",
+                "justification": justification,
                 "priority": "strongly recommended"
             })
 
@@ -202,50 +256,6 @@ def recommend_plan(user_input, priority="", ml_prediction_df=None):
                 "plan": "Plan Recommendation: Low Deductible Plan",
                 "justification": "Since you prefer low deductibles, this plan minimizes out-of-pocket costs before insurance coverage begins.",
                 "priority": "user-selected"
-            })
-
-    # Add demographic-based recommendations using ML-predicted values
-    try:
-        # Extract predicted demographic values
-        predicted_female = float(ml_prediction_df["Percent Female"].iloc[0])
-        predicted_male = float(ml_prediction_df["Percent Male"].iloc[0])
-        predicted_white = float(ml_prediction_df["Percent Non-Hispanic White"].iloc[0])
-        predicted_black = float(ml_prediction_df["Percent African American"].iloc[0])
-        predicted_hispanic = float(ml_prediction_df["Percent Hispanic"].iloc[0])
-    except Exception as e:
-        # If demographic predictions are unavailable, skip these rules
-        predicted_female = predicted_male = predicted_white = predicted_black = predicted_hispanic = None
-
-    # Load dynamic thresholds for demographic fields
-    demographic_keys = ["BENE_FEML_PCT", "BENE_RACE_BLACK_PCT", "BENE_RACE_HSPNC_PCT"]
-    demographic_thresholds = unified_thresholds("processed_user_item_matrix.csv", demographic_keys)
-
-    # Add recommendations based on demographic thresholds
-    if predicted_female is not None:
-        female_thresholds = demographic_thresholds.get("BENE_FEML_PCT", {})
-        if female_thresholds and predicted_female > female_thresholds.get("high", 0.55):
-            recommendations.append({
-                "plan": "Plan Recommendation: Consider Plans with Enhanced Women's Health Coverage",
-                "justification": "The predicted percentage of female beneficiaries is high. Consider plans that include robust maternity and women’s health services.",
-                "priority": "additional"
-            })
-
-    if predicted_black is not None:
-        black_thresholds = demographic_thresholds.get("BENE_RACE_BLACK_PCT", {})
-        if black_thresholds and predicted_black > black_thresholds.get("high", 0.15):
-            recommendations.append({
-                "plan": "Plan Recommendation: Consider Plans with Preventive Care for Chronic Conditions",
-                "justification": "A higher predicted percentage of African American beneficiaries may indicate elevated risk for chronic conditions such as hypertension and diabetes. Plans with strong preventive care and chronic disease management are recommended.",
-                "priority": "additional"
-            })
-
-    if predicted_hispanic is not None:
-        hispanic_thresholds = demographic_thresholds.get("BENE_RACE_HSPNC_PCT", {})
-        if hispanic_thresholds and predicted_hispanic > hispanic_thresholds.get("high", 0.10):
-            recommendations.append({
-                "plan": "Plan Recommendation: Consider Plans Offering Culturally Relevant Healthcare Services",
-                "justification": "A significant predicted Hispanic population suggests that plans offering bilingual support and culturally tailored services could be beneficial.",
-                "priority": "additional"
             })
 
     # Add justification for matching preferred plan type
