@@ -382,6 +382,11 @@ function App() {
         </Button>
       </Form>
 
+      {/* Disclaimer for ethnicity and gender inputs */}
+      <Alert variant="info" className="mt-4">
+        <strong>Note:</strong> Providing your state input will make ethnicity and gender-based recommendations more insightful. Without the state input, these recommendations may lack context.
+      </Alert>
+
       {recommendations.length > 0 && (
         <Card className="mt-4">
           <Card.Header>Recommended Plans</Card.Header>
