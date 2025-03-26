@@ -25,7 +25,13 @@ def recommend_plan(user_input, priority="", ml_prediction_df=None):
     # Load dynamic thresholds for demographic fields based on predicted values
     demographic_keys = ["BENE_FEML_PCT", "BENE_RACE_BLACK_PCT", "BENE_RACE_HSPNC_PCT"]
     try:
-        demographic_thresholds = unified_thresholds("processed_user_item_matrix.csv", demographic_keys)
+        demographic_thresholds = unified_thresholds(
+            "processed_user_item_matrix.csv",
+            demographic_keys,
+            lower_quantile=0.2,
+            upper_quantile=0.8,
+            scale_factor=1.1
+        )
 
         # Validate that demographic_thresholds is a dictionary
         if not isinstance(demographic_thresholds, dict):
@@ -69,7 +75,7 @@ def recommend_plan(user_input, priority="", ml_prediction_df=None):
                 "priority": "strongly recommended"
             })
 
-    # Demographic-based recommendations (evaluated after high-priority rules)
+    # Demographic-based recommendations (evaluated independently)
     try:
         # Extract predicted demographic values
         predicted_female = float(ml_prediction_df["Percent Female"].iloc[0])
@@ -79,7 +85,7 @@ def recommend_plan(user_input, priority="", ml_prediction_df=None):
         # If demographic predictions are unavailable, skip these rules
         predicted_female = predicted_black = predicted_hispanic = None
 
-    if predicted_female is not None:
+    if gender == "female" and predicted_female is not None:
         female_thresholds = demographic_thresholds.get("BENE_FEML_PCT", {})
         if isinstance(female_thresholds, dict) and "high" in female_thresholds and predicted_female > female_thresholds["high"]:
             recommendations.append({
@@ -88,7 +94,7 @@ def recommend_plan(user_input, priority="", ml_prediction_df=None):
                 "priority": "strongly recommended"
             })
 
-    if predicted_black is not None:
+    if ethnicity == "black" and predicted_black is not None:
         black_thresholds = demographic_thresholds.get("BENE_RACE_BLACK_PCT", {})
         if isinstance(black_thresholds, dict) and "high" in black_thresholds and predicted_black > black_thresholds["high"]:
             recommendations.append({
@@ -97,12 +103,10 @@ def recommend_plan(user_input, priority="", ml_prediction_df=None):
                 "priority": "strongly recommended"
             })
 
-    if predicted_hispanic is not None:
+    if ethnicity == "hispanic" and predicted_hispanic is not None:
         hispanic_thresholds = demographic_thresholds.get("BENE_RACE_HSPNC_PCT", {})
         if isinstance(hispanic_thresholds, dict) and "high" in hispanic_thresholds and predicted_hispanic > hispanic_thresholds["high"]:
             justification = "A significant predicted Hispanic population suggests that plans offering bilingual support and culturally tailored services could be beneficial."
-            if ethnicity == "hispanic":
-                justification += " Additionally, since you identified as Hispanic, this recommendation aligns with your demographic needs."
             recommendations.append({
                 "plan": "Plan Recommendation: Consider Plans Offering Culturally Relevant Healthcare Services",
                 "justification": justification,
