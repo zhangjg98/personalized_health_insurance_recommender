@@ -45,6 +45,15 @@ def manage_user_item_matrix(mode="update"):
         user_item_matrix.to_csv('user_item_matrix.csv')
         print(f"User-item matrix saved to user_item_matrix.csv (mode: {mode}).")
 
+def encode_user_inputs(user_inputs):
+    """Convert user inputs into an encoded vector."""
+    # Example encoding logic (one-hot encoding or similar)
+    encoded_vector = []
+    age_mapping = {"18-29": [1, 0, 0], "30-59": [0, 1, 0], "60+": [0, 0, 1]}
+    encoded_vector.extend(age_mapping.get(user_inputs.get('age', ''), [0, 0, 0]))
+    # Add similar mappings for other inputs (e.g., smoker, income, etc.)
+    return encoded_vector
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Manage the user-item matrix.")
     parser.add_argument(
