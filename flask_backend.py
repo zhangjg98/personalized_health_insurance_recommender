@@ -7,6 +7,8 @@ from thresholds import compute_dynamic_thresholds, unified_thresholds
 from neural_collaborative_filtering import load_ncf_model, predict_user_item_interactions
 import pandas as pd
 import numpy as np
+import hashlib
+import json  # Ensure JSON encoding/decoding for user_inputs
 
 app = Flask(__name__)
 CORS(app)
@@ -243,13 +245,11 @@ def recommend():
             if high_count > 0:
                 high_metrics = [k for k, v in classifications.items() if v == "High"]
                 outlier_message += f"Metrics classified as 'High': {', '.join(high_metrics)}."
-            print(f"Outlier message for {state}: {outlier_message}")
 
         # Generate NeuralCollaborativeFiltering recommendations
         if 0 <= user_id < USER_ITEM_MATRIX.shape[0]:
             ncf_recommendations = predict_user_item_interactions(NCF_MODEL, USER_ITEM_MATRIX, user_id)
         else:
-            print(f"Invalid user_id: {user_id}")
             ncf_recommendations = []
 
         # Ensure "Was this recommendation helpful?" does not appear if no valid plan is recommended
@@ -266,7 +266,6 @@ def recommend():
             }]
 
     except Exception as e:
-        print(f"Error during recommendation: {e}")
         return jsonify({"error": str(e)}), 500
 
     return jsonify({
@@ -279,6 +278,10 @@ def recommend():
         "ncf_recommendations": ncf_recommendations,
     })
 
+def hash_user_id(user_id):
+    """Hash the user ID using SHA-256."""
+    return hashlib.sha256(str(user_id).encode('utf-8')).hexdigest()
+
 @app.route('/register', methods=['POST'])
 def register_user():
     data = request.json
@@ -289,42 +292,61 @@ def register_user():
 
 @app.route('/log_interaction', methods=['POST'])
 def log_interaction():
-    data = request.json
-    user_id = data.get('user_id')
-    item_name = data.get('item_id')  # Use the selected recommendation's plan name
-    rating = data.get('rating')
-    user_inputs = data.get('user_inputs', {})  # Get user inputs from the request
+    try:
+        data = request.json
+        user_id = data.get('user_id')
+        item_name = data.get('item_id')  # Use the selected recommendation's plan name
+        rating = data.get('rating')
+        user_inputs = data.get('user_inputs', {})  # Get user inputs from the request
 
-    # Check if the user exists in the `users` table
-    user = User.query.get(user_id)
-    if not user:
-        return jsonify({"error": f"User with id {user_id} does not exist."}), 400
+        # Validate user_id
+        if not user_id or not isinstance(user_id, int):
+            return jsonify({"error": "Invalid or missing user_id. Ensure it is an integer."}), 400
 
-    # Handle fallback case where no recommendation is generated
-    if item_name == "General Feedback":
-        item_name = "No Recommendation Available"
-        item_description = "This feedback was provided when no specific recommendation was generated."
-    else:
-        item_description = "Recommended plan"
+        # Validate rating
+        if rating is None or not isinstance(rating, (int, float)):
+            return jsonify({"error": "Invalid or missing rating. Ensure it is a number."}), 400
 
-    # Ensure the item exists in the `items` table
-    item = Item.query.filter_by(name=item_name).first()
-    if not item:
-        item = Item(name=item_name, description=item_description)
-        db.session.add(item)
+        # Validate item_name
+        if not item_name or not isinstance(item_name, str):
+            return jsonify({"error": "Invalid or missing item_id. Ensure it is a string."}), 400
+
+        # Check if the user exists in the `users` table
+        user = db.session.get(User, user_id)  # Use Session.get() instead of Query.get()
+        if not user:
+            return jsonify({"error": f"User with id {user_id} does not exist."}), 400
+
+        # Handle fallback case where no recommendation is generated
+        if item_name == "General Feedback":
+            item_name = "No Recommendation Available"
+            item_description = "This feedback was provided when no specific recommendation was generated."
+        else:
+            item_description = "Recommended plan"
+
+        # Ensure the item exists in the `items` table
+        item = Item.query.filter_by(name=item_name).first()
+        if not item:
+            item = Item(name=item_name, description=item_description)
+            db.session.add(item)
+            db.session.commit()
+
+        # Serialize user_inputs to JSON string before encryption
+        user_inputs_json = json.dumps(user_inputs)
+
+        # Log the interaction
+        interaction = Interaction(
+            user_id=user_id,  # Use the actual user ID
+            item_id=item.id,
+            rating=rating
+        )
+        interaction.set_user_inputs(user_inputs_json)  # Encrypt and store user inputs
+
+        db.session.add(interaction)
         db.session.commit()
 
-    # Log the interaction
-    interaction = Interaction(
-        user_id=user_id,
-        item_id=item.id,
-        rating=rating,
-        user_inputs=user_inputs  # Store user inputs
-    )
-    db.session.add(interaction)
-    db.session.commit()
-
-    return jsonify({"message": f"Feedback logged for item: {item_name}"})
+        return jsonify({"message": f"Feedback logged for item: {item_name}"})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 @app.route('/get_interactions', methods=['GET'])
 def get_interactions():
