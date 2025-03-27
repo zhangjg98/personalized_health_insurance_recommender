@@ -89,6 +89,11 @@ function App() {
 
       setFeedbackGiven(true); // Mark feedback as given
       setSelectedFeedback(rating === 5 ? "Yes" : "No"); // Set selected feedback
+
+      // Automatically trigger the dropdown if "Yes" is selected and there are multiple plans
+      if (rating === 5 && recommendations.length > 1) {
+        setSelectedRecommendation(""); // Reset the dropdown selection
+      }
     } catch (err) {
       console.error('Error logging feedback:', err);
     }
