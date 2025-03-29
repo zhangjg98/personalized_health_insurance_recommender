@@ -69,10 +69,15 @@ def predict_medicare_spending(state_name):
     # Load original data (for column names and later inverse transformation)
     user_item_matrix = pd.read_csv('processed_user_item_matrix.csv', index_col=0)
     
-    # Select the row corresponding to the given state. Since state is now the index,
-    # this returns a DataFrame.
+    # Debugging log: Check if the state exists in the dataset
+    if state_name not in user_item_matrix.index:
+        print(f"State '{state_name}' not found in the dataset.")
+        return pd.DataFrame()  # Return an empty DataFrame if the state is not found
+
+    # Select the row corresponding to the given state
     numeric_aggregated_state = user_item_matrix.loc[[state_name]]
-    
+    print(f"State data for '{state_name}':\n{numeric_aggregated_state}")  # Debugging log
+
     # Scale using the saved scaler
     sample_scaled = SCALER.transform(numeric_aggregated_state)
     
@@ -111,6 +116,9 @@ def predict_medicare_spending(state_name):
     # Convert to DataFrame with original column names
     predicted_df = pd.DataFrame(reconstructed_output, columns=user_item_matrix.columns)
     predicted_df = predicted_df.rename(columns=friendly_names)
+
+    # Debugging log: Check the predicted DataFrame
+    print(f"Predicted DataFrame for '{state_name}':\n{predicted_df}")  # Debugging log
 
     # Add spending level classifications
     for key, friendly_name in friendly_names.items():
