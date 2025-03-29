@@ -45,23 +45,66 @@ def train_and_save_model(user_item_matrix, latent_dim=50, hidden_dim=128, epochs
     return model
 
 def load_ncf_model(model_path="ncf_model.pth", latent_dim=50, hidden_dim=128):
-    user_item_matrix = pd.read_csv("processed_user_item_matrix.csv", index_col=0)
+    # Load the correct user-item matrix
+    user_item_matrix = pd.read_csv("user_item_matrix.csv", index_col=0)
     num_users, num_items = user_item_matrix.shape
+
+    # Validate the dimensions of the user-item matrix
+    print(f"User-item matrix dimensions: {num_users} users, {num_items} items")
+
     model = NeuralCollaborativeFiltering(num_users, num_items, latent_dim, hidden_dim)
-    model.load_state_dict(torch.load(model_path))
-    model.eval()
+    try:
+        model.load_state_dict(torch.load(model_path))
+        model.eval()
+        print("Model loaded successfully.")
+    except RuntimeError as e:
+        raise RuntimeError(
+            f"Model dimensions do not match the current user-item matrix. "
+            f"Retrain the model to fix this issue. Error: {e}"
+        )
+
     return model, user_item_matrix
 
 def predict_user_item_interactions(model, user_item_matrix, user_id, top_k=5):
+    print("Starting predict_user_item_interactions function...")  # Debugging log
+    print(f"User ID: {user_id}, Top-K: {top_k}")  # Debugging log
+
+    num_users, num_items = user_item_matrix.shape
+    print(f"User-item matrix dimensions: {num_users} users, {num_items} items")  # Debugging log
+
+    # Validate user_id
+    if user_id < 0 or user_id >= num_users:
+        print(f"Invalid user_id: {user_id}. Valid range: [0, {num_users - 1}]")  # Debugging log
+        raise IndexError(f"User ID {user_id} is out of range. Valid range: [0, {num_users - 1}]")
+
+    # Validate item indices
+    if num_items < 2:  # Ensure at least 2 items for meaningful predictions
+        print("Insufficient items in the user-item matrix for predictions.")  # Debugging log
+        return []  # Return an empty list if there are not enough items
+
+    # Adjust top_k to ensure it does not exceed the number of items
+    top_k = min(top_k, num_items) if top_k else num_items
+
     user_tensor = torch.tensor([user_id], dtype=torch.long)
-    item_tensor = torch.arange(user_item_matrix.shape[1], dtype=torch.long)
+    item_tensor = torch.arange(num_items, dtype=torch.long)
 
-    with torch.no_grad():
-        predictions = model(user_tensor.repeat(len(item_tensor)), item_tensor)
-        top_items = torch.topk(predictions, top_k).indices.numpy()
+    try:
+        with torch.no_grad():
+            predictions = model(user_tensor.repeat(len(item_tensor)), item_tensor)
+            print(f"Predictions for user_id {user_id}: {predictions}")  # Debugging log
 
-    item_names = user_item_matrix.columns[top_items].tolist()
-    return item_names
+            # Validate predictions
+            if predictions is None or predictions.numel() == 0:
+                print("No valid predictions generated.")  # Debugging log
+                return []  # Return an empty list if predictions are invalid
+
+            # Use torch.topk to get the top-k items
+            top_items = torch.topk(predictions, top_k).indices.numpy()
+            print(f"Top-{top_k} items for user_id {user_id}: {top_items}")  # Debugging log
+            return top_items.tolist()
+    except Exception as e:
+        print(f"Error during prediction: {e}")  # Debugging log
+        return []  # Return an empty list if an error occurs
 
 def evaluate_model(model, user_item_matrix, threshold=0.5):
     """
