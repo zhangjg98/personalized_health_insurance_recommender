@@ -2,7 +2,7 @@ import pandas as pd
 from flask_backend import app, db, Interaction
 import argparse
 
-def manage_user_item_matrix(mode="update"):
+def manage_user_item_matrix(mode="generate"):
     """
     Manage the user-item matrix by either generating it from scratch or updating it incrementally.
 
@@ -12,7 +12,13 @@ def manage_user_item_matrix(mode="update"):
     with app.app_context():
         interactions = Interaction.query.all()
         data = [(i.user_id, i.item_id, i.rating) for i in interactions]
+        if not data:
+            print("No interactions found in the database.")
+            return
+
         df = pd.DataFrame(data, columns=['user_id', 'item_id', 'rating'])
+        print("Interactions DataFrame:")
+        print(df.head())  # Debugging log
 
         # Aggregate duplicate entries by taking the average rating
         df = df.groupby(['user_id', 'item_id'], as_index=False).mean()
@@ -27,6 +33,9 @@ def manage_user_item_matrix(mode="update"):
             try:
                 # Load the existing matrix
                 user_item_matrix = pd.read_csv('user_item_matrix.csv', index_col=0)
+                print("Existing user-item matrix loaded:")
+                print(user_item_matrix.head())  # Debugging log
+
                 # Update the matrix with new interactions
                 for _, row in df.iterrows():
                     user_id, item_id, rating = int(row['user_id']), int(row['item_id']), row['rating']
@@ -42,8 +51,13 @@ def manage_user_item_matrix(mode="update"):
             raise ValueError("Invalid mode. Use 'generate' or 'update'.")
 
         # Save the user-item matrix to a CSV file
-        user_item_matrix.to_csv('user_item_matrix.csv')
-        print(f"User-item matrix saved to user_item_matrix.csv (mode: {mode}).")
+        if not user_item_matrix.empty:
+            print("Final user-item matrix:")
+            print(user_item_matrix.head())  # Debugging log
+            user_item_matrix.to_csv('user_item_matrix.csv')
+            print(f"User-item matrix saved to user_item_matrix.csv (mode: {mode}).")
+        else:
+            print("User-item matrix is empty. No file was saved.")
 
 def encode_user_inputs(user_inputs):
     """Convert user inputs into an encoded vector."""
