@@ -59,7 +59,14 @@ def classify_value(value, thresholds):
     """
     Classify a value as 'Low', 'Moderate', or 'High' based on thresholds.
     """
-    low, high = thresholds["low"], thresholds["high"]
+    low = thresholds.get("low")
+    high = thresholds.get("high")
+
+    # Ensure thresholds are not None
+    if low is None or high is None:
+        print(f"Invalid thresholds: low={low}, high={high}")  # Debugging log
+        return "Unknown"
+
     mid = (low + high) / 2
     if value < low:
         return "Low"
@@ -91,12 +98,40 @@ def compute_composite_ml_score(spending, risk, er_rate, thresholds):
 @app.route('/recommend', methods=['POST'])
 def recommend():
     try:
+        print("Starting /recommend endpoint...")  # Debugging log
         user_input = request.json
-        print("Received user input:", user_input)
+        print("Received user input:", user_input)  # Debugging log
 
         user_id = int(user_input.get("user_id", -1))
         if user_id == -1:
+            print("Invalid user_id provided.")  # Debugging log
             return jsonify({"error": "Invalid user_id. Please ensure you are logged in or registered."}), 400
+
+        # Generate ML predictions and insights only if a state is provided
+        ml_prediction_df = None
+        state = user_input.get('state', '').strip()
+        if state:
+            print(f"Fetching ML predictions for state: {state}")  # Debugging log
+            try:
+                ml_prediction_df = predict_medicare_spending(state)
+                print("ML Prediction DataFrame:\n", ml_prediction_df)  # Debugging log
+            except Exception as e:
+                print(f"Error during ML prediction for state '{state}': {e}")  # Debugging log
+                return jsonify({"error": f"Error during ML prediction for state '{state}': {e}"}), 500
+
+        # Pass ML predictions to the recommendation logic
+        print("Calling recommend_plan with user input and ML predictions...")  # Debugging log
+        try:
+            recommendations = recommend_plan(user_input, ml_prediction_df=ml_prediction_df)
+            print("Generated recommendations:", recommendations)  # Debugging log
+        except Exception as e:
+            print(f"Error during recommend_plan execution: {e}")  # Debugging log
+            return jsonify({"error": f"Error during recommend_plan execution: {e}"}), 500
+
+        # Check for errors in recommendations
+        if recommendations and recommendations[0].get("priority") == "error":
+            print("Error in recommendations:", recommendations[0]["justification"])  # Debugging log
+            return jsonify({"error": recommendations[0]["justification"]}), 400
 
         priority = user_input.get("priority", "")  # Get a single priority
         state = user_input.get('state', '').strip()
@@ -266,7 +301,8 @@ def recommend():
             }]
 
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        print(f"Unhandled exception in /recommend endpoint: {e}")  # Debugging log
+        return jsonify({"error": f"Unhandled exception: {e}"}), 500
 
     return jsonify({
         "recommendations": valid_recommendations,  # Return recommendations, including fallback
@@ -294,6 +330,8 @@ def register_user():
 def log_interaction():
     try:
         data = request.json
+        print("Received interaction data:", data)  # Debugging log
+
         user_id = data.get('user_id')
         item_name = data.get('item_id')  # Use the selected recommendation's plan name
         rating = data.get('rating')
@@ -344,8 +382,10 @@ def log_interaction():
         db.session.add(interaction)
         db.session.commit()
 
+        print(f"Interaction logged: user_id={user_id}, item_id={item.id}, rating={rating}")  # Debugging log
         return jsonify({"message": f"Feedback logged for item: {item_name}"})
     except Exception as e:
+        print(f"Error logging interaction: {e}")  # Debugging log
         return jsonify({"error": str(e)}), 500
 
 @app.route('/get_interactions', methods=['GET'])
