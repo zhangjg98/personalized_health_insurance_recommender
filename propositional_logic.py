@@ -3,8 +3,18 @@ import os
 from database import db, Item  # Import db and Item from database.py
 from thresholds import unified_thresholds  # Import dynamic thresholds
 from ml_model import predict_medicare_spending  # Use trained data for thresholds
+from neural_collaborative_filtering import predict_user_item_interactions, load_ncf_model
 
 # Description: This file contains the propositional logic for the insurance recommender system.
+
+# Lazy loading of the NCF model and user-item matrix
+NCF_MODEL = None
+USER_ITEM_MATRIX = None
+
+def load_ncf_resources():
+    global NCF_MODEL, USER_ITEM_MATRIX
+    if NCF_MODEL is None or USER_ITEM_MATRIX is None:
+        NCF_MODEL, USER_ITEM_MATRIX = load_ncf_model()
 
 def get_or_create_item(plan_name, plan_description):
     """
@@ -19,7 +29,41 @@ def get_or_create_item(plan_name, plan_description):
 
 # Recommendation function
 def recommend_plan(user_input, priority="", ml_prediction_df=None):
+    print("Starting recommend_plan function...")  # Debugging log
+    print("User input:", user_input)  # Debugging log
+    print("Priority:", priority)  # Debugging log
+    print("ML Prediction DataFrame:\n", ml_prediction_df)  # Debugging log
+
+    # Ensure the NCF model and matrix are loaded
+    try:
+        load_ncf_resources()
+        print("NCF model and user-item matrix loaded successfully.")  # Debugging log
+    except Exception as e:
+        print(f"Error loading NCF resources: {e}")  # Debugging log
+        raise
+
     # Extract user inputs
+    user_id = user_input.get("user_id", -1)
+    if user_id == -1:
+        print("Invalid user_id provided.")  # Debugging log
+        return [{
+            "plan": "No plan available",
+            "justification": "Invalid user ID provided.",
+            "priority": "error"
+        }]
+
+    # Map the actual user_id to the zero-based index in the matrix
+    try:
+        user_index = USER_ITEM_MATRIX.index.tolist().index(user_id)  # Map to zero-based index
+        print(f"Mapped user_id {user_id} to user_index {user_index}.")  # Debugging log
+    except ValueError:
+        print(f"User ID {user_id} not found in the user-item matrix.")  # Debugging log
+        return [{
+            "plan": "No plan available",
+            "justification": f"User ID {user_id} not found in the user-item matrix.",
+            "priority": "error"
+        }]
+
     age_group = user_input.get('age', '18-29')
     smoker = user_input.get('smoker', 'no')
     bmi_category = user_input.get('bmi', '')
@@ -124,59 +168,71 @@ def recommend_plan(user_input, priority="", ml_prediction_df=None):
 
     # Demographic-based recommendations (evaluated independently)
     try:
-        # Extract predicted demographic values
-        predicted_female = float(ml_prediction_df["Percent Female"].iloc[0])
-        predicted_black = float(ml_prediction_df["Percent African American"].iloc[0])
-        predicted_hispanic = float(ml_prediction_df["Percent Hispanic"].iloc[0])
+        # Ensure ml_prediction_df is not empty and contains the required columns
+        if ml_prediction_df is not None and not ml_prediction_df.empty:
+            predicted_female = float(ml_prediction_df.get("Percent Female", [None])[0])
+            predicted_black = float(ml_prediction_df.get("Percent African American", [None])[0])
+            predicted_hispanic = float(ml_prediction_df.get("Percent Hispanic", [None])[0])
+        else:
+            predicted_female = predicted_black = predicted_hispanic = None
     except Exception as e:
-        # If demographic predictions are unavailable, skip these rules
+        print(f"Error processing demographic predictions: {e}")
         predicted_female = predicted_black = predicted_hispanic = None
 
-    if gender == "female" and predicted_female is not None:
-        female_thresholds = demographic_thresholds.get("BENE_FEML_PCT", {})
-        if isinstance(female_thresholds, dict) and "high" in female_thresholds and predicted_female > female_thresholds["high"]:
-            plan_name = "Plan Recommendation: Consider Plans with Enhanced Women's Health Coverage"
-            plan_description = (
-                "The predicted percentage of female beneficiaries is high. Consider plans that include robust maternity and women’s health services."
-            )
-            item_id = get_or_create_item(plan_name, plan_description)
-            recommendations.append({
-                "item_id": item_id,
-                "plan": plan_name,
-                "justification": plan_description,
-                "priority": "strongly recommended"
-            })
+    # Debugging logs for predicted values
+    print(f"Predicted Female: {predicted_female}, Predicted Black: {predicted_black}, Predicted Hispanic: {predicted_hispanic}")
 
-    if ethnicity == "black" and predicted_black is not None:
-        black_thresholds = demographic_thresholds.get("BENE_RACE_BLACK_PCT", {})
-        if isinstance(black_thresholds, dict) and "high" in black_thresholds and predicted_black > black_thresholds["high"]:
-            plan_name = "Plan Recommendation: Consider Plans with Preventive Care for Chronic Conditions"
-            plan_description = (
-                "A higher predicted percentage of African American beneficiaries may indicate elevated risk for chronic conditions such as hypertension and diabetes. "
-                "Plans with strong preventive care and chronic disease management are recommended."
-            )
-            item_id = get_or_create_item(plan_name, plan_description)
-            recommendations.append({
-                "item_id": item_id,
-                "plan": plan_name,
-                "justification": plan_description,
-                "priority": "strongly recommended"
-            })
+    def process_recommendation(demographic, predicted_value, thresholds, plan_name, plan_description):
+        print(f"Processing recommendation for {demographic}...")  # Debugging log
+        print(f"{demographic} Predicted Value: {predicted_value}, {demographic} Thresholds: {thresholds}")  # Debugging log
 
-    if ethnicity == "hispanic" and predicted_hispanic is not None:
-        hispanic_thresholds = demographic_thresholds.get("BENE_RACE_HSPNC_PCT", {})
-        if isinstance(hispanic_thresholds, dict) and "high" in hispanic_thresholds and predicted_hispanic > hispanic_thresholds["high"]:
-            plan_name = "Plan Recommendation: Consider Plans Offering Culturally Relevant Healthcare Services"
-            plan_description = (
-                "A significant predicted Hispanic population suggests that plans offering bilingual support and culturally tailored services could be beneficial."
-            )
-            item_id = get_or_create_item(plan_name, plan_description)
-            recommendations.append({
-                "item_id": item_id,
-                "plan": plan_name,
-                "justification": plan_description,
-                "priority": "strongly recommended"
-            })
+        # Ensure predicted_value and thresholds["high"] are not None
+        if predicted_value is None or thresholds.get("high") is None or thresholds.get("low") is None:
+            print(f"Skipping {demographic} recommendation due to missing predicted value or thresholds.")
+            return
+
+        try:
+            if predicted_value > thresholds["high"]:
+                print(f"{demographic} predicted value ({predicted_value}) is above the high threshold ({thresholds['high']}).")
+                item_id = get_or_create_item(plan_name, plan_description)
+                recommendations.append({
+                    "item_id": item_id,
+                    "plan": plan_name,
+                    "justification": plan_description,
+                    "priority": "strongly recommended"
+                })
+            else:
+                print(f"{demographic} predicted value ({predicted_value}) is not above the high threshold ({thresholds['high']}).")
+        except TypeError as e:
+            print(f"TypeError during comparison for {demographic}: {e}")
+
+    # Process each demographic category
+    if gender == "female":
+        process_recommendation(
+            "Female", 
+            predicted_female, 
+            demographic_thresholds.get("BENE_FEML_PCT", {}), 
+            "Plan Recommendation: Consider Plans with Enhanced Women's Health Coverage", 
+            "The predicted percentage of female beneficiaries is high. Consider plans that include robust maternity and women’s health services."
+        )
+
+    if ethnicity == "black":
+        process_recommendation(
+            "Black", 
+            predicted_black, 
+            demographic_thresholds.get("BENE_RACE_BLACK_PCT", {}), 
+            "Plan Recommendation: Consider Plans with Preventive Care for Chronic Conditions", 
+            "A higher predicted percentage of African American beneficiaries may indicate elevated risk for chronic conditions such as hypertension and diabetes. Plans with strong preventive care and chronic disease management are recommended."
+        )
+
+    if ethnicity == "hispanic":
+        process_recommendation(
+            "Hispanic", 
+            predicted_hispanic, 
+            demographic_thresholds.get("BENE_RACE_HSPNC_PCT", {}), 
+            "Plan Recommendation: Consider Plans Offering Culturally Relevant Healthcare Services", 
+            "A significant predicted Hispanic population suggests that plans offering bilingual support and culturally tailored services could be beneficial."
+        )
 
     # Age-based recommendations
     if age_group == "young_adult" and not recommendations:
@@ -457,20 +513,62 @@ def recommend_plan(user_input, priority="", ml_prediction_df=None):
         if not preferred_plan_exists and preferred_plan_recommendation:
             recommendations.append(preferred_plan_recommendation)
 
-    # Fallback: Recommend the highest-rated plan if no recommendations exist
+    # Step 2: Rank filtered plans using collaborative filtering
+    if recommendations:
+        try:
+            # Ensure the user-item matrix has sufficient data
+            if USER_ITEM_MATRIX.shape[1] < 2:  # Less than 2 items
+                print("Insufficient items in the user-item matrix for collaborative filtering.")  # Debugging log
+                raise ValueError("Insufficient items in the user-item matrix for collaborative filtering.")
+
+            # Predict scores for all plans using collaborative filtering
+            predicted_scores = predict_user_item_interactions(NCF_MODEL, USER_ITEM_MATRIX, user_index, top_k=None)
+
+            # Validate predicted_scores
+            if not predicted_scores:
+                print("No valid scores generated by collaborative filtering.")  # Debugging log
+            else:
+                # Map plan names to item IDs
+                item_id_to_plan = {item.id: item.name for item in Item.query.all()}
+
+                # Rank the filtered recommendations based on collaborative filtering scores
+                for rec in recommendations:
+                    item_id = rec.get("item_id")
+                    if item_id in predicted_scores:
+                        rec["score"] = predicted_scores[item_id]
+                    else:
+                        rec["score"] = 0  # Default score if no prediction is available
+
+                # Sort recommendations by score (highest first)
+                recommendations.sort(key=lambda x: x["score"], reverse=True)
+        except Exception as e:
+            print(f"Error during collaborative filtering: {e}")  # Debugging log
+
+    # Step 3: Handle fallbacks
     if not recommendations:
-        recommendations.append({
-            "plan": None,  # Use None to indicate no valid plan
-            "justification": "Please select more criteria so that we can produce a meaningful recommendation.",
-            "priority": "insufficient_criteria"
-        })
+        try:
+            # Use collaborative filtering to recommend the highest-rated plan
+            if USER_ITEM_MATRIX.shape[1] >= 2:  # Ensure sufficient items
+                top_items = predict_user_item_interactions(NCF_MODEL, USER_ITEM_MATRIX, user_index, top_k=1)
+                if top_items:
+                    top_item_id = top_items[0]
+                    top_item = Item.query.get(top_item_id)
+                    if top_item:
+                        recommendations.append({
+                            "item_id": top_item.id,
+                            "plan": top_item.name,
+                            "justification": "This plan is highly rated by users with similar preferences.",
+                            "priority": "fallback"
+                        })
+        except Exception as e:
+            print(f"Error during fallback logic: {e}")  # Debugging log
 
     # Ensure recommendations is not empty
     if not recommendations:
         recommendations.append({
-            "plan": "Plan Recommendation: Contact a representative for personalized advice",
-            "justification": "Based on the information provided, a representative is more likely to help you identify the most suitable plan.",
-            "priority": "fallback"
+            "plan": "No plan available",
+            "justification": "We could not generate a recommendation based on the provided inputs.",
+            "priority": "insufficient_criteria"
         })
 
     # Convert all recommendation values to standard Python types
@@ -479,4 +577,6 @@ def recommend_plan(user_input, priority="", ml_prediction_df=None):
         rec["justification"] = str(rec["justification"])
         rec["priority"] = str(rec["priority"])
 
+    # Debugging log: Final recommendations
+    print("Final recommendations:", recommendations)  # Debugging log
     return recommendations
