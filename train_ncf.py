@@ -2,10 +2,14 @@ import pandas as pd
 from neural_collaborative_filtering import train_and_save_model, evaluate_model
 
 # Load user-item matrix
-user_item_matrix = pd.read_csv("processed_user_item_matrix.csv", index_col=0).values
+user_item_matrix = pd.read_csv("user_item_matrix.csv", index_col=0).values
+
+# Validate the user-item matrix
+if user_item_matrix.size == 0:
+    raise ValueError("The user-item matrix is empty. Ensure that interactions are logged before training.")
 
 # Train and save the model
-model = train_and_save_model(user_item_matrix, latent_dim=50, hidden_dim=128, epochs=20, lr=0.001)
+model = train_and_save_model(user_item_matrix, latent_dim=50, hidden_dim=128, epochs=20, lr=0.001, model_path="ncf_model.pth")
 
 # Evaluate the model
 mse, f1 = evaluate_model(model, user_item_matrix)
