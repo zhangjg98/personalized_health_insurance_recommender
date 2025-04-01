@@ -68,64 +68,74 @@ function App() {
   const logPlanFeedback = async (rating) => {
     if (feedbackGiven) return; // Prevent multiple feedback submissions
 
-    try {
-      const response = await fetch('/log_interaction', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          user_id: 1, // Use static user_id for now
-          item_id: selectedRecommendation || "General Feedback", // Log the selected recommendation or general feedback
-          rating,
-          user_inputs: formData, // Include formData as user_inputs
-        }),
-      });
+    // Check if multiple plans are recommended
+    const multiplePlans = recommendations.length > 1;
 
-      if (!response.ok) {
-        throw new Error(`Server error: ${response.status}`);
-      }
-
-      const data = await response.json();
-      console.log(data.message);
-
-      setFeedbackGiven(true); // Mark feedback as given
-      setSelectedFeedback(rating === 5 ? "Yes" : "No"); // Set selected feedback
-
-      // Automatically trigger the dropdown if "Yes" is selected and there are multiple plans
-      if (rating === 5 && recommendations.length > 1) {
-        setSelectedRecommendation(""); // Reset the dropdown selection
-      }
-    } catch (err) {
-      console.error('Error logging feedback:', err);
+    if (multiplePlans) {
+        // If multiple plans are recommended, show the dropdown for the user to select a plan
+        setSelectedFeedback(rating === 5 ? "Yes" : "No"); // Set selected feedback
+        if (rating === 5) {
+            // Trigger the dropdown for selecting a plan
+            setSelectedRecommendation(""); // Reset the dropdown selection
+        }
+        setFeedbackGiven(true); // Mark feedback as given to prevent further "Yes"/"No" clicks
+        return;
     }
-  };
 
-  const logSpecificPlanFeedback = async () => {
+    // For single-plan recommendations, log the interaction directly
+    try {
+        const response = await fetch('/log_interaction', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                user_id: 1, // Use static user_id for now
+                item_id: recommendations[0]?.item_id, // Log the first (and only) plan
+                rating,
+                user_inputs: formData, // Include formData as user_inputs
+            }),
+        });
+
+        if (!response.ok) {
+            throw new Error(`Server error: ${response.status}`);
+        }
+
+        const data = await response.json();
+        console.log(data.message);
+
+        setFeedbackGiven(true); // Mark feedback as given
+        setSelectedFeedback(rating === 5 ? "Yes" : "No"); // Set selected feedback
+    } catch (err) {
+        console.error('Error logging feedback:', err);
+    }
+};
+
+const logSpecificPlanFeedback = async () => {
     if (!selectedRecommendation || specificFeedbackGiven) return; // Prevent logging without a selected recommendation
 
     try {
-      const response = await fetch('/log_interaction', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          user_id: 1, // Use static user_id for now
-          item_id: selectedRecommendation, // Log the selected recommendation
-          rating: 5, // Assume positive feedback for the selected plan
-          user_inputs: formData, // Include formData as user_inputs
-        }),
-      });
+        const response = await fetch('/log_interaction', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                user_id: 1, // Use static user_id for now
+                item_id: selectedRecommendation, // Log the selected recommendation
+                rating: 5, // Assume positive feedback for the selected plan
+                user_inputs: formData, // Include formData as user_inputs
+            }),
+        });
 
-      if (!response.ok) {
-        throw new Error(`Server error: ${response.status}`);
-      }
+        if (!response.ok) {
+            throw new Error(`Server error: ${response.status}`);
+        }
 
-      const data = await response.json();
-      console.log(data.message);
+        const data = await response.json();
+        console.log(data.message);
 
-      setSpecificFeedbackGiven(true); // Mark specific feedback as given
+        setSpecificFeedbackGiven(true); // Mark specific feedback as given
     } catch (err) {
-      console.error('Error logging specific plan feedback:', err);
+        console.error('Error logging specific plan feedback:', err);
     }
-  };
+};
 
   const metricsInfo = [
     {
@@ -445,8 +455,7 @@ function App() {
 
             {/* Dropdown for selecting the most useful recommendation */}
             {selectedFeedback === "Yes" &&
-              recommendations.length > 1 &&
-              recommendations.some((rec) => rec.priority !== "insufficient_criteria" && rec.priority !== "warning") && (
+              recommendations.length > 1 && (
               <div className="mt-3">
                 <h5>Which recommendation was most useful to you?</h5>
                 <Form.Select
@@ -457,7 +466,7 @@ function App() {
                 >
                   <option value="">Select a recommendation</option>
                   {recommendations.map((rec, index) => (
-                    <option key={index} value={rec.plan}>
+                    <option key={index} value={rec.item_id}>
                       {rec.plan}
                     </option>
                   ))}
