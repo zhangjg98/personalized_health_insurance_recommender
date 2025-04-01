@@ -80,7 +80,7 @@ def predict_user_item_interactions(model, user_item_matrix, user_id, top_k=5):
     # Validate item indices
     if num_items < 2:  # Ensure at least 2 items for meaningful predictions
         print("Insufficient items in the user-item matrix for predictions.")  # Debugging log
-        return []  # Return an empty list if there are not enough items
+        return {}  # Return an empty dictionary if there are not enough items
 
     # Adjust top_k to ensure it does not exceed the number of items
     top_k = min(top_k, num_items) if top_k else num_items
@@ -96,15 +96,16 @@ def predict_user_item_interactions(model, user_item_matrix, user_id, top_k=5):
             # Validate predictions
             if predictions is None or predictions.numel() == 0:
                 print("No valid predictions generated.")  # Debugging log
-                return []  # Return an empty list if predictions are invalid
+                return {}  # Return an empty dictionary if predictions are invalid
 
-            # Use torch.topk to get the top-k items
-            top_items = torch.topk(predictions, top_k).indices.numpy()
-            print(f"Top-{top_k} items for user_id {user_id}: {top_items}")  # Debugging log
-            return top_items.tolist()
+            # Map item indices to scores
+            item_scores = {item_idx: predictions[item_idx].item() for item_idx in range(num_items)}
+            print(f"Item scores for user_id {user_id}: {item_scores}")  # Debugging log
+
+            return item_scores
     except Exception as e:
         print(f"Error during prediction: {e}")  # Debugging log
-        return []  # Return an empty list if an error occurs
+        return {}  # Return an empty dictionary if an error occurs
 
 def evaluate_model(model, user_item_matrix, threshold=0.5):
     """
