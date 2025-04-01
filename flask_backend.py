@@ -318,6 +318,17 @@ def hash_user_id(user_id):
     """Hash the user ID using SHA-256."""
     return hashlib.sha256(str(user_id).encode('utf-8')).hexdigest()
 
+def get_or_create_item(plan_name, plan_description="Recommended plan"):
+    """
+    Retrieve the item_id for a plan from the database, or create a new entry if it doesn't exist.
+    """
+    item = Item.query.filter_by(name=plan_name).first()
+    if not item:
+        item = Item(name=plan_name, description=plan_description)
+        db.session.add(item)
+        db.session.commit()
+    return item.id
+
 @app.route('/register', methods=['POST'])
 def register_user():
     data = request.json
@@ -333,7 +344,7 @@ def log_interaction():
         print("Received interaction data:", data)  # Debugging log
 
         user_id = data.get('user_id')
-        item_name = data.get('item_id')  # Use the selected recommendation's plan name
+        item_id = data.get('item_id')  # This could be an integer, a string, or a plan_name
         rating = data.get('rating')
         user_inputs = data.get('user_inputs', {})  # Get user inputs from the request
 
@@ -345,28 +356,29 @@ def log_interaction():
         if rating is None or not isinstance(rating, (int, float)):
             return jsonify({"error": "Invalid or missing rating. Ensure it is a number."}), 400
 
-        # Validate item_name
-        if not item_name or not isinstance(item_name, str):
-            return jsonify({"error": "Invalid or missing item_id. Ensure it is a string."}), 400
+        # Handle item_id as a string that can be converted to an integer
+        if isinstance(item_id, str) and item_id.isdigit():
+            item_id = int(item_id)
+
+        # Check if item_id is a valid integer; if not, treat it as a plan_name
+        if isinstance(item_id, str):
+            # Attempt to retrieve the item_id from the database using the plan_name
+            item = Item.query.filter_by(name=item_id).first()
+            if not item:
+                return jsonify({"error": f"Plan '{item_id}' does not exist in the database."}), 400
+            item_id = item.id
+        elif not isinstance(item_id, int):
+            return jsonify({"error": "Invalid or missing item_id. Ensure it is an integer or a valid plan name."}), 400
 
         # Check if the user exists in the `users` table
         user = db.session.get(User, user_id)  # Use Session.get() instead of Query.get()
         if not user:
             return jsonify({"error": f"User with id {user_id} does not exist."}), 400
 
-        # Handle fallback case where no recommendation is generated
-        if item_name == "General Feedback":
-            item_name = "No Recommendation Available"
-            item_description = "This feedback was provided when no specific recommendation was generated."
-        else:
-            item_description = "Recommended plan"
-
-        # Ensure the item exists in the `items` table
-        item = Item.query.filter_by(name=item_name).first()
+        # Check if the item exists in the `items` table
+        item = db.session.get(Item, item_id)
         if not item:
-            item = Item(name=item_name, description=item_description)
-            db.session.add(item)
-            db.session.commit()
+            return jsonify({"error": f"Item with id {item_id} does not exist."}), 400
 
         # Serialize user_inputs to JSON string before encryption
         user_inputs_json = json.dumps(user_inputs)
@@ -374,7 +386,7 @@ def log_interaction():
         # Log the interaction
         interaction = Interaction(
             user_id=user_id,  # Use the actual user ID
-            item_id=item.id,
+            item_id=item_id,  # Use the correct item ID from the request
             rating=rating
         )
         interaction.set_user_inputs(user_inputs_json)  # Encrypt and store user inputs
@@ -382,8 +394,8 @@ def log_interaction():
         db.session.add(interaction)
         db.session.commit()
 
-        print(f"Interaction logged: user_id={user_id}, item_id={item.id}, rating={rating}")  # Debugging log
-        return jsonify({"message": f"Feedback logged for item: {item_name}"})
+        print(f"Interaction logged: user_id={user_id}, item_id={item_id}, rating={rating}")  # Debugging log
+        return jsonify({"message": f"Feedback logged for item: {item.name}"})
     except Exception as e:
         print(f"Error logging interaction: {e}")  # Debugging log
         return jsonify({"error": str(e)}), 500
