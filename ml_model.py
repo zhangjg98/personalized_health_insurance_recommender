@@ -6,6 +6,8 @@ from sklearn.decomposition import PCA  # using PCA instead of SVD
 import pickle
 from models import DeepAutoencoder
 from thresholds import unified_thresholds
+from sentence_transformers import SentenceTransformer
+from sklearn.metrics.pairwise import cosine_similarity
 
 # Define hyperparameters used during training
 n_components = 9
@@ -127,3 +129,43 @@ def predict_medicare_spending(state_name):
                 lambda x: classify_spending(x, key)
             )
     return predicted_df
+
+# Load the pre-trained transformer model for embeddings
+EMBEDDING_MODEL = SentenceTransformer('all-MiniLM-L6-v2')
+
+def generate_embeddings(texts):
+    """
+    Generate embeddings for a list of texts using a pre-trained transformer model.
+    """
+    embeddings = EMBEDDING_MODEL.encode(texts, convert_to_tensor=True)
+    return embeddings.cpu().numpy()  # Move to CPU and convert to NumPy
+
+def content_based_filtering(user_input, plans):
+    """
+    Perform content-based filtering by calculating similarity between user inputs and plan descriptions.
+
+    Parameters:
+        user_input (dict): User inputs containing preferences.
+        plans (list): List of plans with descriptions.
+
+    Returns:
+        list: Ranked plans with similarity scores.
+    """
+    # Combine user inputs into a single string
+    user_text = " ".join([f"{key}: {value}" for key, value in user_input.items() if value])
+
+    # Generate embeddings for user input and plan descriptions
+    user_embedding = generate_embeddings([user_text])
+    plan_descriptions = [plan['description'] for plan in plans]
+    plan_embeddings = generate_embeddings(plan_descriptions)
+
+    # Compute cosine similarity between user input and plan descriptions
+    similarities = cosine_similarity(user_embedding, plan_embeddings).flatten()
+
+    # Add similarity scores to plans
+    for i, plan in enumerate(plans):
+        plan['similarity_score'] = similarities[i]
+
+    # Sort plans by similarity score in descending order
+    ranked_plans = sorted(plans, key=lambda x: x['similarity_score'], reverse=True)
+    return ranked_plans
