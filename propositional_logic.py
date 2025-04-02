@@ -1,5 +1,6 @@
 import pandas as pd
 import os
+import numpy as np  # Import numpy for array operations
 from database import db, Item, Interaction  # Import from database.py
 from thresholds import unified_thresholds  # Import dynamic thresholds
 from ml_model import predict_medicare_spending, content_based_filtering  # Use trained data for thresholds
@@ -22,6 +23,7 @@ def get_or_create_item(plan_name, plan_description):
     """
     item = Item.query.filter_by(name=plan_name).first()
     if not item:
+        print(f"Plan '{plan_name}' not found in the database. Adding it now.")  # Debugging log
         item = Item(name=plan_name, description=plan_description)
         db.session.add(item)
         db.session.commit()
@@ -194,6 +196,13 @@ def recommend_plan(user_input, priority="", ml_prediction_df=None):
             return
 
         try:
+            # Ensure predicted_value is a scalar and not an array
+            if isinstance(predicted_value, (list, np.ndarray)):
+                if len(predicted_value) == 0:
+                    print(f"Skipping {demographic} recommendation due to empty predicted value array.")
+                    return
+                predicted_value = np.array(predicted_value).reshape(-1)[0]  # Convert to scalar if necessary
+
             if predicted_value > thresholds["high"]:
                 print(f"{demographic} predicted value ({predicted_value}) is above the high threshold ({thresholds['high']}).")
                 item_id = get_or_create_item(plan_name, plan_description)
@@ -207,6 +216,8 @@ def recommend_plan(user_input, priority="", ml_prediction_df=None):
                 print(f"{demographic} predicted value ({predicted_value}) is not above the high threshold ({thresholds['high']}).")
         except TypeError as e:
             print(f"TypeError during comparison for {demographic}: {e}")
+        except Exception as e:
+            print(f"Unexpected error during processing for {demographic}: {e}")
 
     # Process each demographic category
     if gender == "female":
@@ -449,6 +460,32 @@ def recommend_plan(user_input, priority="", ml_prediction_df=None):
                 "justification": "POS plans combine features of HMOs and PPOs, offering more flexibility than HMOs while keeping costs relatively low.",
                 "priority": "user-selected"
             }
+
+    # Ensure preferred plan type recommendation is added if no conflicts exist
+    if preferred_plan_type and preferred_plan_recommendation:
+        item_id = get_or_create_item(preferred_plan_recommendation["plan"], preferred_plan_recommendation["justification"])
+        preferred_plan_recommendation["item_id"] = item_id
+        recommendations.append(preferred_plan_recommendation)
+
+    # Validate recommendations before processing
+    if not recommendations:
+        print("No recommendations generated. Returning fallback recommendation.")  # Debugging log
+        return [{
+            "plan": "No plan available",
+            "justification": "We could not generate a recommendation based on the provided inputs.",
+            "priority": "insufficient_criteria"
+        }]
+
+    # Ensure all arrays passed to functions are properly shaped
+    for rec in recommendations:
+        if "explanation" in rec and isinstance(rec["explanation"], list):
+            try:
+                rec["explanation"] = [
+                    [float(val) if val is not None else 0.0 for val in sublist] for sublist in rec["explanation"]
+                ]  # Ensure explanations are 2D arrays
+            except Exception as e:
+                print(f"Error processing explanation for recommendation {rec['plan']}: {e}")
+                rec["explanation"] = "Error processing explanation."
 
     # User-selected priority (evaluated after high-priority rules)
     if priority:
