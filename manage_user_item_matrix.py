@@ -4,6 +4,9 @@ from flask_backend import app, db, Interaction
 import argparse
 from multiprocessing import resource_tracker
 import platform
+import warnings
+
+warnings.filterwarnings("ignore", message="resource_tracker: There appear to be .* leaked semaphore objects")
 
 def manage_user_item_matrix(mode="generate"):
     """
@@ -66,15 +69,27 @@ def manage_user_item_matrix(mode="generate"):
         print("Cleaning up leaked semaphore objects...")
         try:
             shared_memory_path = "/dev/shm" if platform.system() == "Linux" else "/private/var/run"
+            cleaned_semaphores = set()  # Track cleaned semaphores to avoid duplicate cleanup
             if os.path.exists(shared_memory_path):
+                print("Semaphores before cleanup:")
                 for semaphore in os.listdir(shared_memory_path):
                     if semaphore.startswith("sem."):
-                        try:
-                            resource_tracker.unregister(f"{shared_memory_path}/{semaphore}", "semaphore")
-                        except KeyError:
-                            print(f"Semaphore {semaphore} was already unregistered or does not exist.")
-                        except Exception as e:
-                            print(f"Error cleaning semaphore {semaphore}: {e}")
+                        print(semaphore)  # Debugging: List all semaphores
+                        if semaphore not in cleaned_semaphores:
+                            try:
+                                # Check if the semaphore exists in the resource_tracker's cache
+                                resource_tracker.unregister(f"{shared_memory_path}/{semaphore}", "semaphore")
+                                cleaned_semaphores.add(semaphore)  # Mark semaphore as cleaned
+                            except KeyError:
+                                # Suppress KeyError and log a message
+                                print(f"Semaphore {semaphore} was already unregistered or does not exist.")
+                            except Exception as e:
+                                # Suppress other exceptions and log a message
+                                print(f"Error cleaning semaphore {semaphore}: {e}")
+                print("Semaphores after cleanup:")
+                for semaphore in os.listdir(shared_memory_path):
+                    if semaphore.startswith("sem."):
+                        print(semaphore)  # Debugging: List remaining semaphores
             else:
                 print(f"{shared_memory_path} does not exist. Skipping semaphore cleanup.")
         except Exception as e:
