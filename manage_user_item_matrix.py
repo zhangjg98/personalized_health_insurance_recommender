@@ -1,6 +1,9 @@
+import os
 import pandas as pd
 from flask_backend import app, db, Interaction
 import argparse
+from multiprocessing import resource_tracker
+import platform
 
 def manage_user_item_matrix(mode="generate"):
     """
@@ -58,6 +61,25 @@ def manage_user_item_matrix(mode="generate"):
             print(f"User-item matrix saved to user_item_matrix.csv (mode: {mode}).")
         else:
             print("User-item matrix is empty. No file was saved.")
+
+        # Explicitly clean up semaphore objects
+        print("Cleaning up leaked semaphore objects...")
+        try:
+            shared_memory_path = "/dev/shm" if platform.system() == "Linux" else "/private/var/run"
+            if os.path.exists(shared_memory_path):
+                for semaphore in os.listdir(shared_memory_path):
+                    if semaphore.startswith("sem."):
+                        try:
+                            resource_tracker.unregister(f"{shared_memory_path}/{semaphore}", "semaphore")
+                        except KeyError:
+                            print(f"Semaphore {semaphore} was already unregistered or does not exist.")
+                        except Exception as e:
+                            print(f"Error cleaning semaphore {semaphore}: {e}")
+            else:
+                print(f"{shared_memory_path} does not exist. Skipping semaphore cleanup.")
+        except Exception as e:
+            print(f"Error during semaphore cleanup: {e}")
+        print("Semaphore cleanup completed.")
 
 def encode_user_inputs(user_inputs):
     """Convert user inputs into an encoded vector."""
