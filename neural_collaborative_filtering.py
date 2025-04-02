@@ -3,6 +3,8 @@ import torch.nn as nn
 import torch.optim as optim
 import pandas as pd
 from sklearn.metrics import mean_squared_error, f1_score
+import shap
+import numpy as np
 
 class NeuralCollaborativeFiltering(nn.Module):
     def __init__(self, num_users, num_items, latent_dim, hidden_dim):
@@ -135,3 +137,55 @@ def evaluate_model(model, user_item_matrix, threshold=0.5):
     f1 = f1_score(binary_true, binary_pred, average="weighted")
 
     return mse, f1
+
+def explain_ncf_predictions(model, user_item_matrix, user_id, item_id):
+    """
+    Use SHAP to explain the predictions of the Neural Collaborative Filtering model.
+
+    Parameters:
+        model (NeuralCollaborativeFiltering): Trained NCF model.
+        user_item_matrix (numpy.ndarray or DataFrame): User-item interaction matrix.
+        user_id (int): User ID for the explanation.
+        item_id (int): Item ID for the explanation.
+
+    Returns:
+        list or None: SHAP values for the prediction, or None if an error occurs.
+    """
+    # Ensure item_id is valid
+    if item_id is None:
+        print(f"Invalid item_id: {item_id}. Skipping SHAP explanation.")
+        return None
+
+    try:
+        # Convert user_item_matrix to a NumPy array if it's a DataFrame
+        if isinstance(user_item_matrix, pd.DataFrame):
+            user_item_matrix = user_item_matrix.values
+
+        # Define a wrapper function for SHAP
+        def model_predict(inputs):
+            """
+            SHAP-compatible prediction function.
+            Inputs should be a NumPy array where each row contains [user_id, item_id].
+            """
+            # Convert inputs to torch.tensor with appropriate dtype
+            user_inputs = torch.tensor(inputs[:, 0], dtype=torch.long)
+            item_inputs = torch.tensor(inputs[:, 1], dtype=torch.long)
+            with torch.no_grad():
+                predictions = model(user_inputs, item_inputs)
+            return predictions.numpy()
+
+        # Combine user and item indices into a single input for SHAP
+        combined_inputs = np.array([[user_id, item_id]])
+
+        # Use a representative dataset for SHAP initialization
+        representative_data = np.array([[i, j] for i in range(user_item_matrix.shape[0]) for j in range(user_item_matrix.shape[1])])
+
+        # Define a SHAP explainer
+        explainer = shap.Explainer(model_predict, representative_data)
+
+        # Compute SHAP values
+        shap_values = explainer(combined_inputs)
+        return shap_values.values if shap_values is not None else None
+    except Exception as e:
+        print(f"Error generating SHAP explanation for item {item_id}: {e}")
+        return None
