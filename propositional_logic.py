@@ -2,8 +2,8 @@ import pandas as pd
 import os
 from database import db, Item, Interaction  # Import from database.py
 from thresholds import unified_thresholds  # Import dynamic thresholds
-from ml_model import predict_medicare_spending  # Use trained data for thresholds
-from neural_collaborative_filtering import predict_user_item_interactions, load_ncf_model
+from ml_model import predict_medicare_spending, content_based_filtering  # Use trained data for thresholds
+from neural_collaborative_filtering import predict_user_item_interactions, load_ncf_model, explain_ncf_predictions
 
 # Description: This file contains the propositional logic for the insurance recommender system.
 
@@ -64,6 +64,7 @@ def recommend_plan(user_input, priority="", ml_prediction_df=None):
             "priority": "error"
         }]
 
+    # Extract additional user inputs
     age_group = user_input.get('age', '18-29')
     smoker = user_input.get('smoker', 'no')
     bmi_category = user_input.get('bmi', '')
@@ -167,17 +168,18 @@ def recommend_plan(user_input, priority="", ml_prediction_df=None):
             })
 
     # Demographic-based recommendations (evaluated independently)
-    try:
-        # Ensure ml_prediction_df is not empty and contains the required columns
-        if ml_prediction_df is not None and not ml_prediction_df.empty:
-            predicted_female = float(ml_prediction_df.get("Percent Female", [None])[0])
-            predicted_black = float(ml_prediction_df.get("Percent African American", [None])[0])
-            predicted_hispanic = float(ml_prediction_df.get("Percent Hispanic", [None])[0])
-        else:
+    predicted_female = predicted_black = predicted_hispanic = None
+    if ml_prediction_df is not None and not ml_prediction_df.empty:
+        try:
+            if "Percent Female" in ml_prediction_df.columns:
+                predicted_female = float(ml_prediction_df["Percent Female"].iloc[0])
+            if "Percent African American" in ml_prediction_df.columns:
+                predicted_black = float(ml_prediction_df["Percent African American"].iloc[0])
+            if "Percent Hispanic" in ml_prediction_df.columns:
+                predicted_hispanic = float(ml_prediction_df["Percent Hispanic"].iloc[0])
+        except Exception as e:
+            print(f"Error processing demographic predictions: {e}")
             predicted_female = predicted_black = predicted_hispanic = None
-    except Exception as e:
-        print(f"Error processing demographic predictions: {e}")
-        predicted_female = predicted_black = predicted_hispanic = None
 
     # Debugging logs for predicted values
     print(f"Predicted Female: {predicted_female}, Predicted Black: {predicted_black}, Predicted Hispanic: {predicted_hispanic}")
@@ -510,6 +512,10 @@ def recommend_plan(user_input, priority="", ml_prediction_df=None):
             rec["item_id"] = item.id
         else:
             print(f"Warning: Plan '{rec['plan']}' not found in the database.")  # Debugging log
+            rec["item_id"] = None  # Set to None if not found
+
+    # Remove recommendations with invalid item_id
+    recommendations = [rec for rec in recommendations if rec["item_id"] is not None]
 
     # Handle conflicts between primary recommendation and preferred plan type
     if preferred_plan_type:
@@ -520,7 +526,51 @@ def recommend_plan(user_input, priority="", ml_prediction_df=None):
         if not preferred_plan_exists and preferred_plan_recommendation:
             recommendations.append(preferred_plan_recommendation)
 
-    # Step 2: Rank filtered plans using collaborative filtering
+    # Step 1: Apply high-priority rules first
+    if age_group == "young_adult" and income == "below_30000" and chronic_condition == "no":
+        plan_name = "Plan Recommendation: Catastrophic Health Plan"
+        plan_description = (
+            "Young adults with low income can benefit from catastrophic policies. These policies cover numerous essential health benefits like other marketplace plans, "
+            "including preventive services at no cost. They have low monthly premiums and very high deductibles, making them an affordable option for low-income young adults."
+        )
+        item_id = get_or_create_item(plan_name, plan_description)
+        recommendations.append({
+            "item_id": item_id,
+            "plan": plan_name,
+            "justification": plan_description,
+            "priority": "strongly recommended"
+        })
+
+    # Step 2: Filter irrelevant plans during content-based filtering
+    plans = [{"id": item.id, "name": item.name, "description": item.description} for item in Item.query.all()]
+
+    filtered_plans = []
+    for plan in plans:
+        # Apply filtering logic to exclude irrelevant plans
+        if preferred_plan_type and preferred_plan_type not in plan["name"]:
+            continue  # Skip plans that don't match the preferred plan type
+        if "Catastrophic" in plan["name"] and (age_group != "young_adult" or income != "below_30000"):
+            continue  # Skip catastrophic plans for non-young adults with low income
+        if "Family" in plan["name"] and family_size not in ["2_to_3", "4_plus"]:
+            continue  # Skip family plans for users without families
+        if chronic_condition == "no" and "Chronic" in plan["name"]:
+            continue  # Skip chronic care plans for users without chronic conditions
+        filtered_plans.append(plan)
+
+    # Perform content-based filtering on the filtered plans
+    ranked_plans = content_based_filtering(user_input, filtered_plans)
+
+    # Step 3: Add ranked plans to recommendations
+    for plan in ranked_plans:
+        recommendations.append({
+            "item_id": plan.get("id"),
+            "plan": plan.get("name"),
+            "justification": plan.get("description"),
+            "similarity_score": plan.get("similarity_score"),
+            "priority": "content-based"
+        })
+
+    # Step 4: Rank filtered plans using collaborative filtering
     if recommendations:
         try:
             # Ensure the user-item matrix has sufficient data
@@ -537,73 +587,79 @@ def recommend_plan(user_input, priority="", ml_prediction_df=None):
             else:
                 # Map item indices in the matrix to item IDs in the database
                 matrix_index_to_item_id = {index: item.id for index, item in enumerate(Item.query.all())}
+                item_id_to_matrix_index = {v: k for k, v in matrix_index_to_item_id.items()}  # Reverse mapping
+
+                # Debugging log: Check mappings
+                print("Matrix index to item_id mapping:", matrix_index_to_item_id)
+                print("Item_id to matrix index mapping:", item_id_to_matrix_index)
 
                 # Rank the filtered recommendations based on collaborative filtering scores
                 for rec in recommendations:
                     item_id = rec.get("item_id")
                     # Find the matrix index corresponding to the item_id
-                    matrix_index = next((index for index, id in matrix_index_to_item_id.items() if id == item_id), None)
+                    matrix_index = item_id_to_matrix_index.get(item_id)
                     if matrix_index is not None and matrix_index in predicted_scores:
                         rec["score"] = predicted_scores[matrix_index]
                     else:
                         rec["score"] = 0  # Default score if no prediction is available
 
+                # Filter out recommendations with invalid matrix indices
+                recommendations = [
+                    rec for rec in recommendations if rec.get("item_id") in item_id_to_matrix_index
+                ]
+
                 # Sort recommendations by score (highest first)
                 recommendations.sort(key=lambda x: x["score"], reverse=True)
+
+                # Remove duplicate recommendations
+                seen_item_ids = set()
+                recommendations = [
+                    rec for rec in recommendations if not (rec["item_id"] in seen_item_ids or seen_item_ids.add(rec["item_id"]))
+                ]
         except Exception as e:
             print(f"Error during collaborative filtering: {e}")  # Debugging log
 
-    # Step 3: Handle low-rated recommendations with sample size consideration
-    if recommendations:
-        # Check if the first recommendation is lowly rated
-        first_rec = recommendations[0]
-        print(f"Evaluating first recommendation: {first_rec['plan']}")  # Debugging log
+    # Validate that the USER_ITEM_MATRIX has sufficient columns
+    num_items_in_matrix = USER_ITEM_MATRIX.shape[1]
+    num_items_in_db = Item.query.count()
+    if num_items_in_matrix < num_items_in_db:
+        print(f"Mismatch: USER_ITEM_MATRIX has {num_items_in_matrix} columns, but the database has {num_items_in_db} items.")
+        print("Ensure that the USER_ITEM_MATRIX is updated to include all items in the database.")
+        return [{
+            "plan": "No plan available",
+            "justification": "The user-item matrix is not aligned with the database. Please update the matrix.",
+            "priority": "error"
+        }]
 
-        # Fetch the sample size for the plan
+    # Step 5: SHAP Explanations for NCF Predictions
+    valid_item_ids = set(item_id_to_matrix_index.keys())  # Get valid item IDs from the matrix
+    for rec in recommendations:
         try:
-            sample_size = (
-                db.session.query(db.func.count(Interaction.id))
-                .filter(Interaction.item_id == first_rec.get("item_id"))
-                .scalar()
-            )
-            print(f"Sample size for plan '{first_rec['plan']}': {sample_size}")  # Debugging log
+            # Ensure the item_id corresponds to a valid matrix index
+            if rec["item_id"] not in valid_item_ids:
+                print(f"Skipping SHAP explanation for invalid item_id: {rec['item_id']}")  # Debugging log
+                rec["explanation"] = "Invalid item_id for SHAP explanation."
+                continue
 
-            # Define a minimum sample size threshold
-            min_sample_size = 5  # Example threshold
-            if sample_size >= min_sample_size:
-                # Only consider the rating if the sample size is sufficient
-                if first_rec.get("score", 0) < 2:  # Example threshold for low rating
-                    print(f"Plan '{first_rec['plan']}' is lowly rated with sufficient sample size. Finding an alternative...")  # Debugging log
-                    # Remove the lowly rated recommendation
-                    recommendations.pop(0)
+            matrix_index = item_id_to_matrix_index[rec["item_id"]]
+            if matrix_index >= USER_ITEM_MATRIX.shape[1]:  # Validate matrix index range
+                print(f"Matrix index {matrix_index} out of range for item_id: {rec['item_id']}")  # Debugging log
+                rec["explanation"] = (
+                    f"Matrix index {matrix_index} is out of range for the user-item matrix. "
+                    "This item may not be represented in the matrix."
+                )
+                continue
 
-                    # Check if there are other recommendations
-                    if recommendations:
-                        print("Using the next best recommendation.")  # Debugging log
-                    else:
-                        # Default to the highest-rated plan from the interactions table
-                        try:
-                            highest_rated_plan = (
-                                db.session.query(Item.name, db.func.avg(Interaction.rating).label("avg_rating"))
-                                .join(Interaction, Item.id == Interaction.item_id)
-                                .group_by(Item.name)
-                                .order_by(db.desc("avg_rating"))
-                                .first()
-                            )
-                            if highest_rated_plan:
-                                recommendations.append({
-                                    "plan": highest_rated_plan.name,
-                                    "justification": "This plan is highly rated by users.",
-                                    "priority": "fallback"
-                                })
-                        except Exception as e:
-                            print(f"Error during highest-rated fallback logic: {e}")  # Debugging log
+            shap_values = explain_ncf_predictions(NCF_MODEL, USER_ITEM_MATRIX, user_index, matrix_index)
+            if shap_values is not None:
+                rec["explanation"] = shap_values.tolist()  # Add SHAP values to the recommendation
             else:
-                print(f"Plan '{first_rec['plan']}' has insufficient sample size ({sample_size}). Keeping it in recommendations.")  # Debugging log
+                rec["explanation"] = "SHAP explanation could not be generated."
         except Exception as e:
-            print(f"Error fetching sample size for plan '{first_rec['plan']}': {e}")  # Debugging log
+            print(f"Error generating SHAP explanation for item {rec['item_id']}: {e}")
+            rec["explanation"] = "Error occurred while generating SHAP explanation."
 
-    # Step 4: Handle empty recommendations
+    # Step 6: Handle empty recommendations
     if not recommendations:
         recommendations.append({
             "plan": "No plan available",
@@ -611,12 +667,46 @@ def recommend_plan(user_input, priority="", ml_prediction_df=None):
             "priority": "insufficient_criteria"
         })
 
-    # Convert all recommendation values to standard Python types
+    # Step 7: Remove duplicate or low-priority recommendations
+    seen_item_ids = set()
+    final_recommendations = []
     for rec in recommendations:
+        if rec["item_id"] not in seen_item_ids:
+            seen_item_ids.add(rec["item_id"])
+            final_recommendations.append(rec)
+
+    # Filter recommendations to include only "Strongly Recommended" plans
+    filtered_recommendations = [
+        rec for rec in recommendations
+        if rec["priority"] == "strongly recommended"
+        or (priority and rec["priority"] == "user-selected")
+        or (preferred_plan_type and preferred_plan_type in rec.get("plan", ""))
+    ]
+
+    # If no "Strongly Recommended" plans exist, fallback to the original recommendations
+    if not filtered_recommendations:
+        filtered_recommendations = recommendations
+
+    # Remove duplicate or low-priority recommendations
+    seen_item_ids = set()
+    final_recommendations = []
+    for rec in filtered_recommendations:
+        if rec["item_id"] not in seen_item_ids:
+            seen_item_ids.add(rec["item_id"])
+            final_recommendations.append(rec)
+
+    # Convert all recommendation values to standard Python types
+    for rec in final_recommendations:
         rec["plan"] = str(rec["plan"]) if rec["plan"] else "No plan available"
         rec["justification"] = str(rec["justification"])
         rec["priority"] = str(rec["priority"])
+        rec["score"] = float(rec["score"]) if rec.get("score") is not None else 0.0  # Handle None values
+        rec["similarity_score"] = float(rec["similarity_score"]) if rec.get("similarity_score") is not None else 0.0  # Handle None values
+        if "explanation" in rec and isinstance(rec["explanation"], list):
+            rec["explanation"] = [
+                [float(val) if val is not None else 0.0 for val in sublist] for sublist in rec["explanation"]
+            ]  # Handle None values in nested lists
 
     # Debugging log: Final recommendations
-    print("Final recommendations:", recommendations)  # Debugging log
-    return recommendations
+    print("Final recommendations:", final_recommendations)  # Debugging log
+    return final_recommendations
