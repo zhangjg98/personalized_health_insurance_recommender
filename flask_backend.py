@@ -9,6 +9,9 @@ import pandas as pd
 import numpy as np
 import hashlib
 import json  # Ensure JSON encoding/decoding for user_inputs
+import multiprocessing
+import atexit
+import warnings
 
 app = Flask(__name__)
 CORS(app)
@@ -133,26 +136,16 @@ def recommend():
             print("Error in recommendations:", recommendations[0]["justification"])  # Debugging log
             return jsonify({"error": recommendations[0]["justification"]}), 400
 
-        priority = user_input.get("priority", "")  # Get a single priority
-        state = user_input.get('state', '').strip()
-
-        # Generate ML predictions and insights only if a state is provided
-        ml_prediction_df = None
-        if state:
-            ml_prediction_df = predict_medicare_spending(state)
-            print("ML Prediction DataFrame:\n", ml_prediction_df)
-
-        # Pass ML predictions to the recommendation logic
-        recommendations = recommend_plan(user_input, priority, ml_prediction_df)
-
         # Initialize variables with default values
         ml_output_json = []
         ml_summary = ""
         outlier_message = ""
+        clarification_message = ""
+        prediction_context_message = ""
         ncf_recommendations = []
 
         # Generate ML predictions and insights only if a state is provided
-        if state:
+        if state and ml_prediction_df is not None:
             # Load the "National" row for comparison
             national_data = pd.read_csv("processed_user_item_matrix.csv", index_col=0).loc["National"]
 
@@ -221,16 +214,10 @@ def recommend():
             # Spending message
             if spending_classification == "High":
                 messages.append("high spending levels")
-                if recommendations and recommendations[0]["plan"] is not None:
-                    recommendations[0]["plan"] += " (Given high state spending, consider comprehensive coverage.)"
             elif spending_classification == "Low":
                 messages.append("low spending levels")
-                if recommendations and recommendations[0]["plan"] is not None:
-                    recommendations[0]["plan"] += " (Given low state spending, consider plans with lower premiums.)"
             else:
                 messages.append("moderate spending levels")
-                if recommendations and recommendations[0]["plan"] is not None:
-                    recommendations[0]["plan"] += " (State spending levels appear moderate.)"
 
             # Risk message
             if risk_classification == "High":
@@ -300,19 +287,27 @@ def recommend():
                 "priority": "warning"
             }]
 
+        # Ensure all recommendations are JSON-serializable
+        for rec in recommendations:
+            rec["score"] = float(rec["score"]) if rec.get("score") is not None else 0.0  # Handle None values
+            rec["similarity_score"] = float(rec["similarity_score"]) if rec.get("similarity_score") is not None else 0.0  # Handle None values
+            if "explanation" in rec and isinstance(rec["explanation"], list):
+                rec["explanation"] = [
+                    [float(val) if val is not None else 0.0 for val in sublist] for sublist in rec["explanation"]
+                ]  # Handle None values in nested lists
+
+        return jsonify({
+            "recommendations": valid_recommendations,
+            "ml_prediction": ml_output_json,
+            "ml_summary": ml_summary,
+            "outlier_message": outlier_message,
+            "clarification_message": clarification_message if state else "",
+            "prediction_context_message": prediction_context_message if state else "",
+            "ncf_recommendations": ncf_recommendations,
+        })
     except Exception as e:
         print(f"Unhandled exception in /recommend endpoint: {e}")  # Debugging log
         return jsonify({"error": f"Unhandled exception: {e}"}), 500
-
-    return jsonify({
-        "recommendations": valid_recommendations,  # Return recommendations, including fallback
-        "ml_prediction": ml_output_json,
-        "ml_summary": ml_summary,
-        "outlier_message": outlier_message,  # Include the outlier message
-        "clarification_message": clarification_message if state else "",
-        "prediction_context_message": prediction_context_message if state else "",
-        "ncf_recommendations": ncf_recommendations,
-    })
 
 def hash_user_id(user_id):
     """Hash the user ID using SHA-256."""
@@ -414,6 +409,32 @@ def get_interactions():
         for i in interactions
     ]
     return jsonify(data)
+
+# Function to clean up multiprocessing resources
+def cleanup_resources():
+    print("Cleaning up resources...")
+    # Terminate all active child processes
+    for child in multiprocessing.active_children():
+        print(f"Terminating child process: {child.pid}")
+        child.terminate()
+        child.join()  # Ensure the process is fully terminated
+
+    # Explicitly clean up semaphore objects
+    try:
+        print("Cleaning up leaked semaphore objects...")
+        from multiprocessing import resource_tracker
+        resource_tracker.unregister("/mp-semaphore", "semaphore")  # Unregister semaphore objects
+        print("Semaphore cleanup completed.")
+    except Exception as e:
+        print(f"Error during semaphore cleanup: {e}")
+
+    # Suppress warnings about leaked semaphores
+    warnings.filterwarnings("ignore", message="resource_tracker: There appear to be .* leaked semaphore objects")
+
+    print("All resources cleaned up.")
+
+# Register the cleanup function to run at application exit
+atexit.register(cleanup_resources)
 
 if __name__ == "__main__":
     with app.app_context():
