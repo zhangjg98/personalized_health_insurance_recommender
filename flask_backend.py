@@ -12,9 +12,13 @@ import json  # Ensure JSON encoding/decoding for user_inputs
 import multiprocessing
 import atexit
 import warnings
+from analyze_shap_values import generate_user_friendly_shap_explanations
 
 app = Flask(__name__)
 CORS(app)
+
+# Add this line to disable CSRF protection for testing
+app.config['WTF_CSRF_ENABLED'] = False
 
 # Configure PostgreSQL database
 app.config['SQLALCHEMY_DATABASE_URI'] = 'postgresql://recommender_user:securepassword@localhost/health_insurance_recommender'
@@ -130,6 +134,13 @@ def recommend():
         except Exception as e:
             print(f"Error during recommend_plan execution: {e}")  # Debugging log
             return jsonify({"error": f"Error during recommend_plan execution: {e}"}), 500
+
+        # Add SHAP explanations for each recommendation
+        for rec in recommendations:
+            item_id = rec.get("item_id")
+            if item_id is not None:
+                shap_explanation = generate_user_friendly_shap_explanations(NCF_MODEL, USER_ITEM_MATRIX, user_id, item_id)
+                rec["shap_explanation"] = shap_explanation
 
         # Check for errors in recommendations
         if recommendations and recommendations[0].get("priority") == "error":
@@ -296,11 +307,14 @@ def recommend():
                 rec["priority"] = str(rec["priority"])
                 rec["score"] = float(rec["score"]) if rec.get("score") is not None else 0.0
                 rec["similarity_score"] = float(rec["similarity_score"]) if rec.get("similarity_score") is not None else 0.0
-                if "explanation" in rec and isinstance(rec["explanation"], list):
-                    rec["explanation"] = [
-                        {"feature": str(entry["feature"]), "impact": float(entry["impact"])}
-                        for entry in rec["explanation"]
-                    ]
+                if "shap_explanation" in rec and isinstance(rec["shap_explanation"], dict):
+                    rec["shap_explanation"] = {
+                        "top_features": [
+                            {"feature": str(entry[0]), "impact": float(entry[1])}
+                            for entry in rec["shap_explanation"].get("top_features", [])
+                        ],
+                        "explanation": str(rec["shap_explanation"].get("explanation", ""))
+                    }
             for record in ml_output_json:
                 for key, value in record.items():
                     if isinstance(value, (np.float32, np.float64)):
@@ -452,7 +466,7 @@ def cleanup_resources():
 # Register the cleanup function to run at application exit
 atexit.register(cleanup_resources)
 
-if __name__ == "__main__":
+if __name__ == "__main__":  # Ensure debug=True is set
     with app.app_context():
         create_tables()
     app.run(debug=True)
