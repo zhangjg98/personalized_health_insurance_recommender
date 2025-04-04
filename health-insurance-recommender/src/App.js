@@ -418,6 +418,34 @@ const logSpecificPlanFeedback = async () => {
                       <strong>{rec.priority === "strongly recommended" ? "Strongly Recommended:" : "Recommended:"}</strong> {rec.plan}
                     </Card.Text>
                     <Card.Text><em>{rec.justification}</em></Card.Text>
+                    <Card.Text>
+                      <strong>Explanation:</strong>{" "}
+                      {rec.explanation ? (
+                        <ul>
+                          {rec.explanation.top_features.map((feature, index) => (
+                            <li key={index}>
+                              <strong>{feature[0]}:</strong> Impact {feature[1]}
+                            </li>
+                          ))}
+                        </ul>
+                      ) : (
+                        "No explanation available."
+                      )}
+                    </Card.Text>
+                    <Card.Text>
+                      <strong>SHAP Explanation:</strong>{" "}
+                      {rec.shap_explanation && rec.shap_explanation.top_features ? (
+                        <ul>
+                          {rec.shap_explanation.top_features.map((feature, index) => (
+                            <li key={index}>
+                              <strong>{feature.feature}:</strong> Impact {feature.impact}
+                            </li>
+                          ))}
+                        </ul>
+                      ) : (
+                        "No SHAP explanation available."
+                      )}
+                    </Card.Text>
                     {formData.preferred_plan_type && rec.plan.includes(formData.preferred_plan_type) && (
                       <Alert variant="info">
                         This recommendation matches your preferred plan type: {formData.preferred_plan_type}.
