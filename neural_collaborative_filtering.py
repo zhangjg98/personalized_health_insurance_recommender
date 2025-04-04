@@ -149,7 +149,7 @@ def explain_ncf_predictions(model, user_item_matrix, user_id, item_id):
         item_id (int): Item ID for the explanation.
 
     Returns:
-        list or None: SHAP values for the prediction, or None if an error occurs.
+        np.ndarray or None: SHAP values for the prediction, or None if an error occurs.
     """
     # Ensure item_id is valid
     if item_id is None:
@@ -167,7 +167,6 @@ def explain_ncf_predictions(model, user_item_matrix, user_id, item_id):
             SHAP-compatible prediction function.
             Inputs should be a NumPy array where each row contains [user_id, item_id].
             """
-            # Convert inputs to torch.tensor with appropriate dtype
             user_inputs = torch.tensor(inputs[:, 0], dtype=torch.long)
             item_inputs = torch.tensor(inputs[:, 1], dtype=torch.long)
             with torch.no_grad():
@@ -185,7 +184,11 @@ def explain_ncf_predictions(model, user_item_matrix, user_id, item_id):
 
         # Compute SHAP values
         shap_values = explainer(combined_inputs)
-        return shap_values.values if shap_values is not None else None
+        if shap_values.values is not None and len(shap_values.values) > 0:
+            return shap_values.values
+        else:
+            print(f"SHAP values are empty for user_id {user_id} and item_id {item_id}.")
+            return None
     except Exception as e:
         print(f"Error generating SHAP explanation for item {item_id}: {e}")
         return None
