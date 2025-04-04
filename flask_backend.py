@@ -287,17 +287,33 @@ def recommend():
                 "priority": "warning"
             }]
 
-        # Ensure all recommendations are JSON-serializable
-        for rec in recommendations:
-            rec["score"] = float(rec["score"]) if rec.get("score") is not None else 0.0  # Handle None values
-            rec["similarity_score"] = float(rec["similarity_score"]) if rec.get("similarity_score") is not None else 0.0  # Handle None values
-            if "explanation" in rec and isinstance(rec["explanation"], list):
-                rec["explanation"] = [
-                    [float(val) if val is not None else 0.0 for val in sublist] for sublist in rec["explanation"]
-                ]  # Handle None values in nested lists
+        # Ensure all recommendations and insights are JSON-serializable
+        try:
+            print("Validating JSON serialization compatibility...")  # Debugging log
+            for rec in recommendations:
+                rec["plan"] = str(rec["plan"]) if rec.get("plan") else "No plan available"
+                rec["justification"] = str(rec["justification"])
+                rec["priority"] = str(rec["priority"])
+                rec["score"] = float(rec["score"]) if rec.get("score") is not None else 0.0
+                rec["similarity_score"] = float(rec["similarity_score"]) if rec.get("similarity_score") is not None else 0.0
+                if "explanation" in rec and isinstance(rec["explanation"], list):
+                    rec["explanation"] = [
+                        {"feature": str(entry["feature"]), "impact": float(entry["impact"])}
+                        for entry in rec["explanation"]
+                    ]
+            for record in ml_output_json:
+                for key, value in record.items():
+                    if isinstance(value, (np.float32, np.float64)):
+                        record[key] = float(value)
+                    elif isinstance(value, (np.int32, np.int64)):
+                        record[key] = int(value)
+            print("Recommendations and insights after ensuring JSON compatibility:", recommendations, ml_output_json)  # Debugging log
+        except Exception as e:
+            print(f"Error ensuring JSON serialization compatibility: {e}")  # Debugging log
+            return jsonify({"error": f"Error ensuring JSON serialization compatibility: {e}"}), 500
 
         return jsonify({
-            "recommendations": valid_recommendations,
+            "recommendations": recommendations,
             "ml_prediction": ml_output_json,
             "ml_summary": ml_summary,
             "outlier_message": outlier_message,
