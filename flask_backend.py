@@ -142,20 +142,15 @@ def recommend():
                 shap_explanation = generate_user_friendly_shap_explanations(NCF_MODEL, USER_ITEM_MATRIX, user_id, item_id)
                 rec["shap_explanation"] = shap_explanation
 
-        # Check for errors in recommendations
-        if recommendations and recommendations[0].get("priority") == "error":
-            print("Error in recommendations:", recommendations[0]["justification"])  # Debugging log
-            return jsonify({"error": recommendations[0]["justification"]}), 400
+        # Remove disclaimer from backend response
+        recommendations = [
+            rec for rec in recommendations if rec["priority"] != "disclaimer"
+        ]
 
-        # Initialize variables with default values
+        # Ensure state-level messages are only generated when a state is provided
         ml_output_json = []
         ml_summary = ""
         outlier_message = ""
-        clarification_message = ""
-        prediction_context_message = ""
-        ncf_recommendations = []
-
-        # Generate ML predictions and insights only if a state is provided
         if state and ml_prediction_df is not None:
             # Load the "National" row for comparison
             national_data = pd.read_csv("processed_user_item_matrix.csv", index_col=0).loc["National"]
@@ -279,25 +274,6 @@ def recommend():
                 high_metrics = [k for k, v in classifications.items() if v == "High"]
                 outlier_message += f"Metrics classified as 'High': {', '.join(high_metrics)}."
 
-        # Generate NeuralCollaborativeFiltering recommendations
-        if 0 <= user_id < USER_ITEM_MATRIX.shape[0]:
-            ncf_recommendations = predict_user_item_interactions(NCF_MODEL, USER_ITEM_MATRIX, user_id)
-        else:
-            ncf_recommendations = []
-
-        # Ensure "Was this recommendation helpful?" does not appear if no valid plan is recommended
-        valid_recommendations = [
-            rec for rec in recommendations if rec.get("priority") != "insufficient_criteria"
-        ]
-
-        # If no valid recommendations exist, add a fallback warning message
-        if not valid_recommendations:
-            valid_recommendations = [{
-                "plan": "No plan available",
-                "justification": "Insufficient inputs provided. Please provide more information to generate meaningful recommendations.",
-                "priority": "warning"
-            }]
-
         # Ensure all recommendations and insights are JSON-serializable
         try:
             print("Validating JSON serialization compatibility...")  # Debugging log
@@ -331,9 +307,6 @@ def recommend():
             "ml_prediction": ml_output_json,
             "ml_summary": ml_summary,
             "outlier_message": outlier_message,
-            "clarification_message": clarification_message if state else "",
-            "prediction_context_message": prediction_context_message if state else "",
-            "ncf_recommendations": ncf_recommendations,
         })
     except Exception as e:
         print(f"Unhandled exception in /recommend endpoint: {e}")  # Debugging log
