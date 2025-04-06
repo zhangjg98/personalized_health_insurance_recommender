@@ -5,6 +5,7 @@ from database import db, Item, Interaction  # Import from database.py
 from thresholds import unified_thresholds  # Import dynamic thresholds
 from ml_model import predict_medicare_spending, content_based_filtering  # Use trained data for thresholds
 from neural_collaborative_filtering import predict_user_item_interactions, load_ncf_model, explain_ncf_predictions
+from plans import PLANS  # Import plans from plans dictionary
 
 # Description: This file contains the propositional logic for the insurance recommender system.
 
@@ -44,6 +45,14 @@ def recommend_plan(user_input, priority="", ml_prediction_df=None):
         print(f"Error loading NCF resources: {e}")  # Debugging log
         raise
 
+    # Map item indices in the matrix to item IDs in the database
+    matrix_index_to_item_id = {index: item.id for index, item in enumerate(Item.query.all())}
+    item_id_to_matrix_index = {v: k for k, v in matrix_index_to_item_id.items()}  # Reverse mapping
+
+    # Debugging log: Check mappings
+    print("Matrix index to item_id mapping:", matrix_index_to_item_id)
+    print("Item_id to matrix index mapping:", item_id_to_matrix_index)
+
     # Extract user inputs
     user_id = user_input.get("user_id", -1)
     if user_id == -1:
@@ -65,6 +74,11 @@ def recommend_plan(user_input, priority="", ml_prediction_df=None):
             "justification": f"User ID {user_id} not found in the user-item matrix.",
             "priority": "error"
         }]
+
+    recommendations = []
+
+    # Debugging log: Check initial recommendations
+    print("Initial recommendations:", recommendations)
 
     # Extract additional user inputs
     age_group = user_input.get('age', '18-29')
@@ -101,74 +115,54 @@ def recommend_plan(user_input, priority="", ml_prediction_df=None):
 
     # High-priority rules (evaluated first)
     if smoker == "yes":
-        plan_name = "Plan Recommendation: Prioritize Plans with High Deductible and Preventive Care for Smokers"
-        plan_description = (
-            "Smokers will have higher health insurance premiums, so a high deductible plan will help mitigate "
-            "the monthly premium amount. Preventive care includes services that will help with health screenings, "
-            "which could be important due to risks of lung cancer and other health problems for smokers."
-        )
-        item_id = get_or_create_item(plan_name, plan_description)
+        plan = PLANS["high_deductible_smokers"]
+        item_id = get_or_create_item(plan["name"], plan["description"])
         recommendations.append({
             "item_id": item_id,
-            "plan": plan_name,
-            "justification": plan_description,
+            "plan": plan["name"],
+            "justification": plan["description"],
             "priority": "strongly recommended"
         })
+        if not priority and not preferred_plan_type:
+            return recommendations
 
-    if bmi_category == "underweight" and not recommendations:
-        plan_name = "Plan Recommendation: Prioritize Plans with Specialized Nutritional Support Coverage"
-        plan_description = (
-            "Strongly consider a plan that provides specialized nutritional support if you have issues with being underweight. "
-            "Nutritional support is a therapy that can help for people who have difficulty getting enough nourishment through eating or drinking."
-        )
-        item_id = get_or_create_item(plan_name, plan_description)
+    if bmi_category == "underweight":
+        plan = PLANS["nutritional_support_underweight"]
+        item_id = get_or_create_item(plan["name"], plan["description"])
         recommendations.append({
             "item_id": item_id,
-            "plan": plan_name,
-            "justification": plan_description,
+            "plan": plan["name"],
+            "justification": plan["description"],
             "priority": "strongly recommended"
         })
-    elif bmi_category in ["overweight", "obese"] and not recommendations:
-        plan_name = "Plan Recommendation: Look Into Plans that Provide Health and Wellness Programs"
-        plan_description = (
-            "For those struggling with weight issues, plans that can provide health and wellness programs should be strongly considered. "
-            "Moving towards a healthy lifestyle is critical in ensuring that you do not have health issues further down the line."
-        )
-        item_id = get_or_create_item(plan_name, plan_description)
+        if not priority and not preferred_plan_type:
+            return recommendations
+    elif bmi_category in ["overweight", "obese"]:
+        plan = PLANS["wellness_programs_overweight"]
+        item_id = get_or_create_item(plan["name"], plan["description"])
         recommendations.append({
             "item_id": item_id,
-            "plan": plan_name,
-            "justification": plan_description,
+            "plan": plan["name"],
+            "justification": plan["description"],
             "priority": "strongly recommended"
         })
+        if not priority and not preferred_plan_type:
+            return recommendations
 
-    if chronic_condition == "yes" and not recommendations:
+    if chronic_condition == "yes":
         if medical_care_frequency == "Low":
-            plan_name = "Plan Recommendation: Medication Therapy Management Program for Chronic Conditions"
-            plan_description = (
-                "If you do not need to see a doctor frequently but have a chronic condition, a medication therapy management program might be suited for you. "
-                "This plan makes sure that you take your medications correctly and safely, and basic services related to your condition come at no cost."
-            )
-            item_id = get_or_create_item(plan_name, plan_description)
-            recommendations.append({
-                "item_id": item_id,
-                "plan": plan_name,
-                "justification": plan_description,
-                "priority": "strongly recommended"
-            })
+            plan = PLANS["chronic_care_low_frequency"]
         else:
-            plan_name = "Plan Recommendation: Chronic Care Coverage"
-            plan_description = (
-                "Chronic care coverage is a Medicare program that helps with chronic conditions. Services include a comprehensive care plan that lists your health problems and goals "
-                "as well as provide needed medication and urgent care needs."
-            )
-            item_id = get_or_create_item(plan_name, plan_description)
-            recommendations.append({
-                "item_id": item_id,
-                "plan": plan_name,
-                "justification": plan_description,
-                "priority": "strongly recommended"
-            })
+            plan = PLANS["chronic_care_high_frequency"]
+        item_id = get_or_create_item(plan["name"], plan["description"])
+        recommendations.append({
+            "item_id": item_id,
+            "plan": plan["name"],
+            "justification": plan["description"],
+            "priority": "strongly recommended"
+        })
+        if not priority and not preferred_plan_type:
+            return recommendations
 
     # Demographic-based recommendations (evaluated independently)
     predicted_female = predicted_black = predicted_hispanic = None
@@ -222,577 +216,405 @@ def recommend_plan(user_input, priority="", ml_prediction_df=None):
 
     # Process each demographic category
     if gender == "female":
+        plan = PLANS["enhanced_womens_health"]
         process_recommendation(
-            "Female", 
-            predicted_female, 
-            demographic_thresholds.get("BENE_FEML_PCT", {}), 
-            "Plan Recommendation: Consider Plans with Enhanced Women's Health Coverage", 
-            "The predicted percentage of female beneficiaries is high. Consider plans that include robust maternity and women’s health services."
+            "Female",
+            predicted_female,
+            demographic_thresholds.get("BENE_FEML_PCT", {}),
+            plan["name"],
+            plan["description"]
         )
 
     if ethnicity == "black":
+        plan = PLANS["preventive_care_chronic_conditions_african_americans"]
         process_recommendation(
-            "Black", 
-            predicted_black, 
-            demographic_thresholds.get("BENE_RACE_BLACK_PCT", {}), 
-            "Plan Recommendation: Consider Plans with Preventive Care for Chronic Conditions", 
-            "A higher predicted percentage of African American beneficiaries may indicate elevated risk for chronic conditions such as hypertension and diabetes. Plans with strong preventive care and chronic disease management are recommended."
+            "Black",
+            predicted_black,
+            demographic_thresholds.get("BENE_RACE_BLACK_PCT", {}),
+            plan["name"],
+            plan["description"]
         )
 
     if ethnicity == "hispanic":
+        plan = PLANS["culturally_relevant_healthcare_hispanics"]
         process_recommendation(
-            "Hispanic", 
-            predicted_hispanic, 
-            demographic_thresholds.get("BENE_RACE_HSPNC_PCT", {}), 
-            "Plan Recommendation: Consider Plans Offering Culturally Relevant Healthcare Services", 
-            "A significant predicted Hispanic population suggests that plans offering bilingual support and culturally tailored services could be beneficial."
+            "Hispanic",
+            predicted_hispanic,
+            demographic_thresholds.get("BENE_RACE_HSPNC_PCT", {}),
+            plan["name"],
+            plan["description"]
         )
 
     # Age-based recommendations
     if age_group == "young_adult" and not recommendations:
         if income == "below_30000":
             if chronic_condition == "yes":
-                plan_name = "Plan Recommendation: Strongly Consider Medicaid or Subsidized Marketplace Plan with Chronic Care Management Services"
-                plan_description = (
-                    "Young adults with low income and a chronic condition should prioritize Medicaid (if eligible) or subsidized marketplace plans. "
-                    "Medicaid is a government program that provides comprehensive benefits for low-income individuals at little to no cost. "
-                    "If you are not eligible for Medicaid, prioritize a low-cost plan or subsidized plan that still provides chronic care management services."
-                )
-                item_id = get_or_create_item(plan_name, plan_description)
-                recommendations.append({
-                    "item_id": item_id,
-                    "plan": plan_name,
-                    "justification": plan_description,
-                    "priority": "strongly recommended"
-                })
+                plan = PLANS["medicaid_or_subsidized_young_adults"]
             else:
-                plan_name = "Plan Recommendation: Catastrophic Health Plan"
-                plan_description = (
-                    "Young adults with low income can benefit from catastrophic policies. These policies cover numerous essential health benefits like other marketplace plans, "
-                    "including preventive services at no cost. They have low monthly premiums and very high deductibles, making them an affordable option for low-income young adults."
-                )
-                item_id = get_or_create_item(plan_name, plan_description)
-                recommendations.append({
-                    "item_id": item_id,
-                    "plan": plan_name,
-                    "justification": plan_description,
-                    "priority": "strongly recommended"
-                })
-        elif bmi_category == "normal" and chronic_condition == "no" and medical_care_frequency == "Low":
-            plan_name = "Plan Recommendation: Prioritize Plans with High Deductible and Low Premium"
-            plan_description = (
-                "If you are a young, healthy adult, having a plan with high deductible and low premium can be well suited for you. "
-                "These plans will keep you insured in case for getting sick or injured, and the low monthly premiums will ensure that you do not have to pay too much to stay insured."
-            )
-            item_id = get_or_create_item(plan_name, plan_description)
+                plan = PLANS["catastrophic_young_adults"]
+            item_id = get_or_create_item(plan["name"], plan["description"])
             recommendations.append({
                 "item_id": item_id,
-                "plan": plan_name,
-                "justification": plan_description,
+                "plan": plan["name"],
+                "justification": plan["description"],
+                "priority": "strongly recommended"
+            })
+        elif bmi_category == "normal" and chronic_condition == "no" and medical_care_frequency == "Low":
+            plan = PLANS["high_deductible_low_premium_young_adults"]
+            item_id = get_or_create_item(plan["name"], plan["description"])
+            recommendations.append({
+                "item_id": item_id,
+                "plan": plan["name"],
+                "justification": plan["description"],
                 "priority": "strongly recommended"
             })
 
     if age_group == "adult" and not recommendations:
         if income == "below_30000":
-            plan_name = "Plan Recommendation: Prioritize Affordable Plans that Provide Preventive Care Options"
-            plan_description = (
-                "Adults with low income should prioritize affordability over all else to ensure that they are covered. "
-                "These plans should still include preventive care options to ensure basic health needs and services."
-            )
-            item_id = get_or_create_item(plan_name, plan_description)
+            plan = PLANS["affordable_preventive_adults"]
+            item_id = get_or_create_item(plan["name"], plan["description"])
             recommendations.append({
                 "item_id": item_id,
-                "plan": plan_name,
-                "justification": plan_description,
+                "plan": plan["name"],
+                "justification": plan["description"],
                 "priority": "strongly recommended"
             })
         elif medical_care_frequency == "High":
-            plan_name = "Plan Recommendation: Prioritize a Moderate Deductible Plan"
-            plan_description = (
-                "If you have frequent medical care visits, it is important to have a deductible that is at the very least moderate. "
-                "A moderate deductible ensures a reasonable balance between monthly premiums and out of pocket costs incurred until the deductible amount is hit."
-            )
-            item_id = get_or_create_item(plan_name, plan_description)
+            plan = PLANS["moderate_deductible_adults"]
+            item_id = get_or_create_item(plan["name"], plan["description"])
             recommendations.append({
                 "item_id": item_id,
-                "plan": plan_name,
-                "justification": plan_description,
+                "plan": plan["name"],
+                "justification": plan["description"],
                 "priority": "strongly recommended"
             })
 
     if age_group == "senior" and not recommendations:
         if chronic_condition == "yes" or medical_care_frequency == "High":
-            plan_name = "Plan Recommendation: Prioritize Low-Deductible Plans"
-            plan_description = (
-                "For seniors with chronic conditions or frequent medical visits, it is best to prioritize a low-deductible plan. "
-                "These types of plans ensure that you will not have to pay too much out of pocket to reach your deductible amount. "
-                "This in turn will allow you to have your plan cover frequent medical expenses after reaching the deductible amount."
-            )
-            item_id = get_or_create_item(plan_name, plan_description)
+            plan = PLANS["low_deductible_seniors"]
+            item_id = get_or_create_item(plan["name"], plan["description"])
             recommendations.append({
                 "item_id": item_id,
-                "plan": plan_name,
-                "justification": plan_description,
+                "plan": plan["name"],
+                "justification": plan["description"],
                 "priority": "strongly recommended"
             })
 
     # Family size adjustments
     if family_size == "4_plus" and not recommendations:
         if income == "above_100000":
-            plan_name = "Plan Recommendation: Consider Preferred Provider Organization (PPO) Plans with Family Coverage and Comprehensive Benefits"
-            plan_description = (
-                "PPO plans give great flexibility that allow you to see doctors in and outside of the plan network. "
-                "You ensure that your family members will get the care they need while not restricting them."
-            )
-            item_id = get_or_create_item(plan_name, plan_description)
-            recommendations.append({
-                "item_id": item_id,
-                "plan": plan_name,
-                "justification": plan_description,
-                "priority": "strongly recommended"
-            })
+            plan = PLANS["ppo_family_coverage_high_income"]
         else:
-            plan_name = "Plan Recommendation: Consider Family Coverage with Pediatric and Maternity Benefits"
-            plan_description = (
-                "Pediatric and maternity benefits will help cover medical care for children and mothers (for pregnancy and childbirth) respectively. "
-                "Making sure that your family gets the benefits they need is important with a family."
-            )
-            item_id = get_or_create_item(plan_name, plan_description)
-            recommendations.append({
-                "item_id": item_id,
-                "plan": plan_name,
-                "justification": plan_description,
-                "priority": "strongly recommended"
-            })
-    elif family_size == "2_to_3" and not recommendations:
-        plan_name = "Plan Recommendation: Consider Family Plans with Preventive Care and Moderate Deductibles"
-        plan_description = (
-            "For smaller families, a family health plan that balances affordability with services like preventive care is ideal. "
-            "Moderate deductibles ensure manageable out-of-pocket costs while providing coverage for routine check-ups and family-specific needs."
-        )
-        item_id = get_or_create_item(plan_name, plan_description)
+            plan = PLANS["family_coverage_pediatric_maternity"]
+        item_id = get_or_create_item(plan["name"], plan["description"])
         recommendations.append({
             "item_id": item_id,
-            "plan": plan_name,
-            "justification": plan_description,
+            "plan": plan["name"],
+            "justification": plan["description"],
+            "priority": "strongly recommended"
+        })
+    elif family_size == "2_to_3" and not recommendations:
+        plan = PLANS["family_plans_preventive_moderate_deductibles"]
+        item_id = get_or_create_item(plan["name"], plan["description"])
+        recommendations.append({
+            "item_id": item_id,
+            "plan": plan["name"],
+            "justification": plan["description"],
             "priority": "strongly recommended"
         })
 
     # Gender-based recommendations
     if gender == "female" and not recommendations:
-        plan_name = "Plan Recommendation: Prioritize Plans with Maternity and Preventive Care Benefits"
-        plan_description = (
-            "For females, plans with maternity benefits and preventive care services are highly recommended to ensure comprehensive coverage for women's health needs."
-        )
-        item_id = get_or_create_item(plan_name, plan_description)
+        plan = PLANS["maternity_preventive_care_females"]
+        item_id = get_or_create_item(plan["name"], plan["description"])
         recommendations.append({
             "item_id": item_id,
-            "plan": plan_name,
-            "justification": plan_description,
+            "plan": plan["name"],
+            "justification": plan["description"],
             "priority": "strongly recommended"
         })
 
     # Generalized Income-based recommendations
     if not recommendations:
         if income == "below_30000" and age_group != "young_adult":
-            plan_name = "Plan Recommendation: Consider Low Cost or Subsidized Coverage"
-            plan_description = (
-                "Low cost plans ensure that you stay covered for basic medical needs. Subsidized coverage is health coverage that comes at reduced or low costs for people below certain income thresholds. "
-                "Both are affordable ways to ensure you still get sufficient medical coverage."
-            )
-            item_id = get_or_create_item(plan_name, plan_description)
+            plan = PLANS["low_cost_subsidized_coverage"]
+            item_id = get_or_create_item(plan["name"], plan["description"])
             recommendations.append({
                 "item_id": item_id,
-                "plan": plan_name,
-                "justification": plan_description,
+                "plan": plan["name"],
+                "justification": plan["description"],
                 "priority": "strongly recommended"
             })
         elif income in ["75000_to_99999", "30000_to_74999"]:
-            plan_name = "Plan Recommendation: High Deductible Health Plans (HDHPs) with Health Savings Account (HSA)"
-            plan_description = (
-                "HDHPs have high deductibles and low premiums. A HSA allows you to pay that deductible amount and other medical costs with money set aside in an account where you can contribute and withdraw tax-free. "
-                "HDHPs and HSAs usually go hand in hand, making them a solid option for people in your income range."
-            )
-            item_id = get_or_create_item(plan_name, plan_description)
+            plan = PLANS["hdhp_with_hsa"]
+            item_id = get_or_create_item(plan["name"], plan["description"])
             recommendations.append({
                 "item_id": item_id,
-                "plan": plan_name,
-                "justification": plan_description,
+                "plan": plan["name"],
+                "justification": plan["description"],
                 "priority": "strongly recommended"
             })
         elif income == "above_100000":
-            plan_name = "Plan Recommendation: Preferred Provider Organization (PPO) Plans that Ensure Flexibility"
-            plan_description = (
-                "PPO plans give great flexibility that allow you to see doctors in and outside of the plan network. "
-                "You can get the care that you want at any provider you would like, though costs will be lower if you do choose to go with an in-network provider."
-            )
-            item_id = get_or_create_item(plan_name, plan_description)
+            plan = PLANS["ppo_flexibility_high_income"]
+            item_id = get_or_create_item(plan["name"], plan["description"])
             recommendations.append({
                 "item_id": item_id,
-                "plan": plan_name,
-                "justification": plan_description,
+                "plan": plan["name"],
+                "justification": plan["description"],
                 "priority": "strongly recommended"
             })
 
     # Rules based on Preferred Plan Type
-    preferred_plan_recommendation = None
     if preferred_plan_type:
-        if preferred_plan_type == "HMO":
-            preferred_plan_recommendation = {
-                "plan": "Plan Recommendation: Health Maintenance Organization (HMO) Plan",
-                "justification": "HMO plans typically offer lower premiums and coordinated care within a network, making them ideal if you prefer managed care.",
+        plan = PLANS.get(f"{preferred_plan_type.lower()}_plan")
+        if plan:
+            item_id = get_or_create_item(plan["name"], plan["description"])
+            recommendations.append({
+                "item_id": item_id,
+                "plan": plan["name"],
+                "justification": plan["description"],
                 "priority": "user-selected"
-            }
-        elif preferred_plan_type == "PPO":
-            preferred_plan_recommendation = {
-                "plan": "Plan Recommendation: Preferred Provider Organization (PPO) Plan",
-                "justification": "PPO plans provide more flexibility in choosing providers and generally offer comprehensive benefits.",
-                "priority": "user-selected"
-            }
-        elif preferred_plan_type == "EPO":
-            preferred_plan_recommendation = {
-                "plan": "Plan Recommendation: Exclusive Provider Organization (EPO) Plan",
-                "justification": "EPO plans require using a network of providers but often have lower premiums than PPOs. They’re a good option if you don’t need out-of-network coverage.",
-                "priority": "user-selected"
-            }
-        elif preferred_plan_type == "POS":
-            preferred_plan_recommendation = {
-                "plan": "Plan Recommendation: Point of Service (POS) Plan",
-                "justification": "POS plans combine features of HMOs and PPOs, offering more flexibility than HMOs while keeping costs relatively low.",
-                "priority": "user-selected"
-            }
+            })
 
-    # Ensure preferred plan type recommendation is added if no conflicts exist
-    if preferred_plan_type and preferred_plan_recommendation:
-        item_id = get_or_create_item(preferred_plan_recommendation["plan"], preferred_plan_recommendation["justification"])
-        preferred_plan_recommendation["item_id"] = item_id
+    def filter_preferred_plan_type_recommendations(recommendations, preferred_plan_type):
+        """
+        Filter recommendations to ensure:
+        1. Strongly recommended plans for the preferred plan type are prioritized.
+        2. Priority-based plans for the preferred plan type are considered next.
+        3. A generic preferred plan type recommendation is included if no specific matches exist.
+        """
+        if not preferred_plan_type:
+            return recommendations
 
-        # Check if a strongly recommended plan matching the preferred plan type exists
-        matching_preferred_plan_exists = any(
-            rec.get("priority") == "strongly recommended" and preferred_plan_type in rec.get("plan", "")
-            for rec in recommendations
-        )
-
-        # Filter out all generic recommendations for the preferred plan type if a strongly recommended match exists
-        recommendations = [
-            rec for rec in recommendations if not (
-                rec.get("priority") == "user-selected" and preferred_plan_type in rec.get("plan", "")
-            )
+        # Separate recommendations by priority
+        strongly_recommended = [
+            rec for rec in recommendations
+            if rec["priority"] == "strongly recommended" and preferred_plan_type.lower() in rec["plan"].lower()
+        ]
+        priority_based = [
+            rec for rec in recommendations
+            if rec["priority"] == "user-selected priority" and preferred_plan_type.lower() in rec["plan"].lower()
+        ]
+        generic_preferred = [
+            rec for rec in recommendations
+            if rec["priority"] == "user-selected" and preferred_plan_type.lower() in rec["plan"].lower()
         ]
 
-        # Add the preferred plan type recommendation only if no strongly recommended match exists
-        if not matching_preferred_plan_exists:
-            recommendations.append(preferred_plan_recommendation)
+        # Combine recommendations in the correct priority order
+        filtered_recommendations = strongly_recommended + priority_based
 
-    # Validate recommendations before processing
-    if not recommendations:
-        print("No recommendations generated. Returning fallback recommendation.")  # Debugging log
-        return [{
-            "plan": "No plan available",
-            "justification": "We could not generate a recommendation based on the provided inputs.",
-            "priority": "insufficient_criteria"
-        }]
+        # Add one generic preferred plan type recommendation if no matches exist in the first two categories
+        if not filtered_recommendations and generic_preferred:
+            filtered_recommendations.append(generic_preferred[0])
 
-    # Filter recommendations to prioritize "Strongly Recommended" plans
-    strongly_recommended_plans = [
-        rec for rec in recommendations if rec.get("priority") == "strongly recommended"
-    ]
+        # Add other recommendations that do not match the preferred plan type
+        other_recommendations = [
+            rec for rec in recommendations
+            if rec not in strongly_recommended + priority_based + generic_preferred
+        ]
+        return filtered_recommendations + other_recommendations
 
-    # Include priority-based recommendations
-    priority_recommendations = []
-    if priority:  # Keep this block
-        priority_plan_name = None
-        priority_plan_description = None
+    def remove_duplicates(recommendations):
+        """
+        Remove duplicate recommendations based on `item_id` while preserving order.
+        """
+        seen_item_ids = set()
+        unique_recommendations = []
+        for rec in recommendations:
+            # Ensure `item_id` exists before processing
+            if "item_id" not in rec:
+                print(f"Error: Missing `item_id` in recommendation: {rec}")  # Debugging log
+                continue
+            if rec["item_id"] not in seen_item_ids:
+                unique_recommendations.append(rec)
+                seen_item_ids.add(rec["item_id"])
+        return unique_recommendations
 
-        if priority == "Low Premiums":
-            priority_plan_name = "Plan Recommendation: High Deductible, Low Premium Plan"
-            priority_plan_description = (
-                "Since you prioritize low premiums, a high deductible plan is recommended. These plans have lower monthly costs, making them more affordable."
-            )
-        elif priority == "Comprehensive Coverage":
-            priority_plan_name = "Plan Recommendation: Comprehensive PPO Plan"
-            priority_plan_description = (
-                "Since you value comprehensive coverage, a PPO plan is recommended. These plans provide flexibility and access to a wide range of healthcare providers."
-            )
-        elif priority == "Preventive Care":
-            priority_plan_name = "Plan Recommendation: Preventive Care-Focused Plan"
-            priority_plan_description = (
-                "Since you prioritize preventive care, this plan includes extensive preventive services to help you maintain good health."
-            )
-        elif priority == "Low Deductibles":
-            priority_plan_name = "Plan Recommendation: Low Deductible Plan"
-            priority_plan_description = (
-                "Since you prefer low deductibles, this plan minimizes out-of-pocket costs before insurance coverage begins."
-            )
-
-        if priority_plan_name and priority_plan_description:
-            item_id = get_or_create_item(priority_plan_name, priority_plan_description)
-            priority_recommendations.append({
+    # Include priority-based recommendations only if no strongly recommended plans exist
+    if priority and not any(rec["priority"] == "strongly recommended" for rec in recommendations):
+        plan_key = priority.lower().replace(" ", "_")  # Convert priority to match the plan key format
+        plan = PLANS.get(plan_key)
+        if plan:
+            print(f"Generating priority-based recommendation for priority: {priority}")  # Debugging log
+            item_id = get_or_create_item(plan["name"], plan["description"])
+            priority_recommendation = {
                 "item_id": item_id,
-                "plan": priority_plan_name,
-                "justification": priority_plan_description,
+                "plan": plan["name"],
+                "justification": plan["description"],
                 "priority": "user-selected priority"
-            })
+            }
+            recommendations = [priority_recommendation] + recommendations  # Add priority-based plan to the top
+        else:
+            print(f"Error: No plan found for priority: {priority}")  # Debugging log
 
-    # Include preferred plan type recommendations
-    preferred_plan_recommendations = []
-    if preferred_plan_type:
-        preferred_plan_name = None
-        preferred_plan_description = None
-
-        if preferred_plan_type == "HMO":
-            preferred_plan_name = "Plan Recommendation: Health Maintenance Organization (HMO) Plan"
-            preferred_plan_description = (
-                "HMO plans typically offer lower premiums and coordinated care within a network, making them ideal if you prefer managed care."
-            )
-        elif preferred_plan_type == "PPO":
-            preferred_plan_name = "Plan Recommendation: Preferred Provider Organization (PPO) Plan"
-            preferred_plan_description = (
-                "PPO plans provide more flexibility in choosing providers and generally offer comprehensive benefits."
-            )
-        elif preferred_plan_type == "EPO":
-            preferred_plan_name = "Plan Recommendation: Exclusive Provider Organization (EPO) Plan"
-            preferred_plan_description = (
-                "EPO plans require using a network of providers but often have lower premiums than PPOs. They’re a good option if you don’t need out-of-network coverage."
-            )
-        elif preferred_plan_type == "POS":
-            preferred_plan_name = "Plan Recommendation: Point of Service (POS) Plan"
-            preferred_plan_description = (
-                "POS plans combine features of HMOs and PPOs, offering more flexibility than HMOs while keeping costs relatively low."
-            )
-
-        if preferred_plan_name and preferred_plan_description:
-            # Always include the preferred plan type recommendation
-            item_id = get_or_create_item(preferred_plan_name, preferred_plan_description)
-            preferred_plan_recommendations.append({
-                "item_id": item_id,
-                "plan": preferred_plan_name,
-                "justification": preferred_plan_description,
-                "priority": "user-selected"
-            })
+    # Filter recommendations based on the preferred plan type
+    recommendations = filter_preferred_plan_type_recommendations(recommendations, preferred_plan_type)
 
     # Combine all relevant recommendations
-    final_recommendations = strongly_recommended_plans + priority_recommendations + preferred_plan_recommendations
+    def remove_duplicates(recommendations):
+        """
+        Remove duplicate recommendations based on `item_id` while preserving order.
+        """
+        seen_item_ids = set()
+        unique_recommendations = []
+        for rec in recommendations:
+            # Ensure `item_id` exists before processing
+            if "item_id" not in rec:
+                print(f"Error: Missing `item_id` in recommendation: {rec}")  # Debugging log
+                continue
+            if rec["item_id"] not in seen_item_ids:
+                unique_recommendations.append(rec)
+                seen_item_ids.add(rec["item_id"])
+        return unique_recommendations
 
-    # Separate recommendations into categories
+    # Ensure content-based and collaborative filtering are only applied when no strongly recommended plans exist
     strongly_recommended_plans = [
         rec for rec in recommendations if rec.get("priority") == "strongly recommended"
     ]
-    supplemental_recommendations = [
-        rec for rec in recommendations if rec.get("priority") != "strongly recommended"
-    ]
 
-    # Combine recommendations while ensuring `Strongly Recommended` plans appear first
-    final_recommendations = strongly_recommended_plans + supplemental_recommendations + priority_recommendations
+    if not strongly_recommended_plans:
+        # Step 1: Filter irrelevant plans during content-based filtering
+        def filter_irrelevant_plans(user_input, plans):
+            filtered_plans = []
+            for plan in plans:
+                if user_input.get("smoker") == "no" and "smoker" in plan["description"].lower():
+                    continue
+                if user_input.get("chronic_condition") == "no" and "chronic" in plan["description"].lower():
+                    continue
+                if user_input.get("family_size") not in ["2_to_3", "4_plus"] and "family" in plan["description"].lower():
+                    continue
+                if user_input.get("age") == "young_adult" and "senior" in plan["description"].lower():
+                    continue
+                if user_input.get("preferred_plan_type") and user_input["preferred_plan_type"] not in plan["name"]:
+                    continue
+                filtered_plans.append(plan)
+            return filtered_plans
 
-    # Remove duplicates while preserving order
-    seen_item_ids = set()
-    final_recommendations = [
-        rec for rec in final_recommendations if not (rec["item_id"] in seen_item_ids or seen_item_ids.add(rec["item_id"]))
-    ]
+        plans = [{"id": item.id, "name": item.name, "description": item.description} for item in Item.query.all()]
+        filtered_plans = filter_irrelevant_plans(user_input, plans)
 
-    if final_recommendations:
-        print("Returning combined recommendations: Strongly Recommended followed by supplemental recommendations.")  # Debugging log
-        return final_recommendations
+        # Debugging log: Check filtered plans
+        print("Filtered plans:", filtered_plans)
 
-    # Remove duplicates while preserving order
-    seen_item_ids = set()
-    final_recommendations = [
-        rec for rec in final_recommendations if not (rec["item_id"] in seen_item_ids or seen_item_ids.add(rec["item_id"]))
-    ]
+        # Step 2: Perform content-based filtering with hard constraints
+        ranked_plans = content_based_filtering(user_input, filtered_plans)
 
-    if final_recommendations:
-        print("Returning combined recommendations: Strongly Recommended, Priority, and Preferred Plan Type.")  # Debugging log
-        return final_recommendations
+        # Limit to the top-ranked content-based recommendation
+        if ranked_plans:
+            top_plan = ranked_plans[0]
+            item_id = top_plan.get("id")  # Ensure item_id is set
+            if item_id is not None:
+                recommendations.append({
+                    "item_id": item_id,
+                    "plan": top_plan.get("name"),
+                    "justification": top_plan.get("description"),
+                    "similarity_score": top_plan.get("similarity_score"),
+                    "priority": "content-based",
+                    "disclaimer_note": "These plans are generated using advanced filtering techniques to provide additional insights."
+                })
 
-    # User-selected priority (evaluated after high-priority rules)
-    if priority:
-        if priority == "Low Premiums":
-            plan_name = "Plan Recommendation: High Deductible, Low Premium Plan"
-            plan_description = (
-                "Since you prioritize low premiums, a high deductible plan is recommended. These plans have lower monthly costs, making them more affordable."
-            )
-            item_id = get_or_create_item(plan_name, plan_description)
-            recommendations.append({
-                "item_id": item_id,
-                "plan": plan_name,
-                "justification": plan_description,
-                "priority": "user-selected"
-            })
-        elif priority == "Comprehensive Coverage":
-            plan_name = "Plan Recommendation: Comprehensive PPO Plan"
-            plan_description = (
-                "Since you value comprehensive coverage, a PPO plan is recommended. These plans provide flexibility and access to a wide range of healthcare providers."
-            )
-            item_id = get_or_create_item(plan_name, plan_description)
-            recommendations.append({
-                "item_id": item_id,
-                "plan": plan_name,
-                "justification": plan_description,
-                "priority": "user-selected"
-            })
-        elif priority == "Preventive Care":
-            plan_name = "Plan Recommendation: Preventive Care-Focused Plan"
-            plan_description = (
-                "Since you prioritize preventive care, this plan includes extensive preventive services to help you maintain good health."
-            )
-            item_id = get_or_create_item(plan_name, plan_description)
-            recommendations.append({
-                "item_id": item_id,
-                "plan": plan_name,
-                "justification": plan_description,
-                "priority": "user-selected"
-            })
-        elif priority == "Low Deductibles":
-            plan_name = "Plan Recommendation: Low Deductible Plan"
-            plan_description = (
-                "Since you prefer low deductibles, this plan minimizes out-of-pocket costs before insurance coverage begins."
-            )
-            item_id = get_or_create_item(plan_name, plan_description)
-            recommendations.append({
-                "item_id": item_id,
-                "plan": plan_name,
-                "justification": plan_description,
-                "priority": "user-selected"
-            })
+        # Debugging log: Check recommendations after limiting content-based filtering
+        print("Recommendations after limiting content-based filtering:", recommendations)
 
-    # Add justification for matching preferred plan type
-    for rec in recommendations:
-        if preferred_plan_type and preferred_plan_type in rec.get("plan", ""):
-            rec["justification"] += f" This recommendation aligns with your preferred plan type: {preferred_plan_type}."
+        # Step 3: Rank filtered plans using collaborative filtering
+        def rank_with_collaborative_filtering(recommendations, user_index):
+            try:
+                if USER_ITEM_MATRIX.shape[1] < 2:
+                    raise ValueError("Insufficient items in the user-item matrix for collaborative filtering.")
 
-        # Ensure the item_id is consistent with the database
-        item = Item.query.filter_by(name=rec["plan"]).first()
-        if item:
-            rec["item_id"] = item.id
-        else:
-            print(f"Warning: Plan '{rec['plan']}' not found in the database.")  # Debugging log
-            rec["item_id"] = None  # Set to None if not found
+                predicted_scores = predict_user_item_interactions(NCF_MODEL, USER_ITEM_MATRIX, user_index, top_k=None)
 
-    # Remove recommendations with invalid item_id
-    recommendations = [rec for rec in recommendations if rec["item_id"] is not None]
-
-    # Handle conflicts between primary recommendation and preferred plan type
-    if preferred_plan_type:
-        # Check if any existing recommendation already matches the preferred plan type
-        preferred_plan_exists = any(
-            preferred_plan_type in rec.get("plan", "") for rec in recommendations
-        )
-        if not preferred_plan_exists and preferred_plan_recommendation:
-            # Add only the default PPO plan if the preferred plan type is PPO
-            if preferred_plan_type == "PPO":
-                recommendations = [
-                    rec for rec in recommendations if "PPO" not in rec.get("plan", "")
-                ]
-            recommendations.append(preferred_plan_recommendation)
-
-    # Step 1: Apply high-priority rules first
-    if age_group == "young_adult" and income == "below_30000" and chronic_condition == "no":
-        plan_name = "Plan Recommendation: Catastrophic Health Plan"
-        plan_description = (
-            "Young adults with low income can benefit from catastrophic policies. These policies cover numerous essential health benefits like other marketplace plans, "
-            "including preventive services at no cost. They have low monthly premiums and very high deductibles, making them an affordable option for low-income young adults."
-        )
-        item_id = get_or_create_item(plan_name, plan_description)
-        recommendations.append({
-            "item_id": item_id,
-            "plan": plan_name,
-            "justification": plan_description,
-            "priority": "strongly recommended"
-        })
-
-    # Step 2: Filter irrelevant plans during content-based filtering
-    plans = [{"id": item.id, "name": item.name, "description": item.description} for item in Item.query.all()]
-
-    filtered_plans = []
-    for plan in plans:
-        # Apply filtering logic to exclude irrelevant plans
-        if user_input.get("smoker") == "no" and "smoker" in plan["description"].lower():
-            continue  # Skip plans targeted at smokers
-        if user_input.get("chronic_condition") == "no" and "chronic" in plan["description"].lower():
-            continue  # Skip chronic care plans for users without chronic conditions
-        if user_input.get("family_size") not in ["2_to_3", "4_plus"] and "family" in plan["description"].lower():
-            continue  # Skip family plans for users without families
-        if user_input.get("age") == "young_adult" and "senior" in plan["description"].lower():
-            continue  # Skip senior plans for young adults
-        if user_input.get("preferred_plan_type") and user_input["preferred_plan_type"] not in plan["name"]:
-            continue  # Skip plans that don't match the preferred plan type
-        filtered_plans.append(plan)
-
-    # Perform content-based filtering on the filtered plans
-    ranked_plans = content_based_filtering(user_input, filtered_plans)
-
-    # Step 3: Add ranked plans to recommendations
-    for plan in ranked_plans:
-        recommendations.append({
-            "item_id": plan.get("id"),
-            "plan": plan.get("name"),
-            "justification": plan.get("description"),
-            "similarity_score": plan.get("similarity_score"),
-            "priority": "content-based"
-        })
-
-    # Step 4: Rank filtered plans using collaborative filtering
-    if recommendations:
-        try:
-            # Ensure the user-item matrix has sufficient data
-            if USER_ITEM_MATRIX.shape[1] < 2:  # Less than 2 items
-                print("Insufficient items in the user-item matrix for collaborative filtering.")  # Debugging log
-                raise ValueError("Insufficient items in the user-item matrix for collaborative filtering.")
-
-            # Predict scores for all plans using collaborative filtering
-            predicted_scores = predict_user_item_interactions(NCF_MODEL, USER_ITEM_MATRIX, user_index, top_k=None)
-
-            # Validate predicted_scores
-            if not predicted_scores:
-                print("No valid scores generated by collaborative filtering.")  # Debugging log
-            else:
-                # Map item indices in the matrix to item IDs in the database
-                matrix_index_to_item_id = {index: item.id for index, item in enumerate(Item.query.all())}
-                item_id_to_matrix_index = {v: k for k, v in matrix_index_to_item_id.items()}  # Reverse mapping
-
-                # Debugging log: Check mappings
-                print("Matrix index to item_id mapping:", matrix_index_to_item_id)
-                print("Item_id to matrix index mapping:", item_id_to_matrix_index)
-
-                # Rank the filtered recommendations based on collaborative filtering scores
                 for rec in recommendations:
                     item_id = rec.get("item_id")
-                    # Find the matrix index corresponding to the item_id
                     matrix_index = item_id_to_matrix_index.get(item_id)
                     if matrix_index is not None and matrix_index in predicted_scores:
                         rec["score"] = predicted_scores[matrix_index]
+                        # Ensure only one disclaimer is added
+                        if "disclaimer_note" not in rec:
+                            rec["disclaimer_note"] = "These plans are generated using advanced filtering techniques to provide additional insights."
                     else:
-                        rec["score"] = 0  # Default score if no prediction is available
+                        rec["score"] = 0
 
-                # Filter out recommendations with invalid matrix indices
                 recommendations = [
                     rec for rec in recommendations if rec.get("item_id") in item_id_to_matrix_index
                 ]
-
-                # Sort recommendations by score (highest first)
                 recommendations.sort(key=lambda x: x["score"], reverse=True)
+                return recommendations
+            except Exception as e:
+                print(f"Error during collaborative filtering: {e}")
+                return recommendations
 
-                # Remove duplicate recommendations
-                seen_item_ids = set()
-                recommendations = [
-                    rec for rec in recommendations if not (rec["item_id"] in seen_item_ids or seen_item_ids.add(rec["item_id"]))
-                ]
-        except Exception as e:
-            print(f"Error during collaborative filtering: {e}")  # Debugging log
+        recommendations = rank_with_collaborative_filtering(recommendations, user_index)
 
-    # Validate that the USER_ITEM_MATRIX has sufficient columns
-    num_items_in_matrix = USER_ITEM_MATRIX.shape[1]
-    num_items_in_db = Item.query.count()
-    if num_items_in_matrix < num_items_in_db:
-        print(f"Mismatch: USER_ITEM_MATRIX has {num_items_in_matrix} columns, but the database has {num_items_in_db} items.")
-        print("Ensure that the USER_ITEM_MATRIX is updated to include all items in the database.")
-        return [{
+        # Debugging log: Check recommendations after collaborative filtering
+        print("Recommendations after collaborative filtering:", recommendations)
+
+    # Limit the number of recommendations displayed to the user
+    MAX_RECOMMENDATIONS = 3
+    final_recommendations = remove_duplicates(recommendations)[:MAX_RECOMMENDATIONS]
+
+    # Fallback if no recommendations exist
+    if not final_recommendations:
+        fallback_plan = {
             "plan": "No plan available",
-            "justification": "The user-item matrix is not aligned with the database. Please update the matrix.",
-            "priority": "error"
-        }]
+            "justification": "We could not generate a recommendation based on the provided inputs.",
+            "priority": "insufficient_criteria",
+            "item_id": -1  # Use a placeholder `item_id` for fallback
+        }
+        final_recommendations.append(fallback_plan)
 
+    # Step 4: Validate SHAP explanations
+    def add_shap_explanations(recommendations, user_index):
+        valid_item_ids = set(item_id_to_matrix_index.keys())
+        for rec in recommendations:
+            # Skip disclaimer recommendations
+            if rec["priority"] == "disclaimer":
+                continue
+
+            try:
+                if rec["item_id"] not in valid_item_ids:
+                    rec["shap_explanation"] = {
+                        "top_features": [],
+                        "explanation": "Invalid item_id for SHAP explanation."
+                    }
+                    continue
+
+                matrix_index = item_id_to_matrix_index[rec["item_id"]]
+                if matrix_index >= USER_ITEM_MATRIX.shape[1]:
+                    rec["shap_explanation"] = {
+                        "top_features": [],
+                        "explanation": "Matrix index out of range."
+                    }
+                    continue
+
+                # Generate SHAP values
+                shap_values = explain_ncf_predictions(NCF_MODEL, USER_ITEM_MATRIX, user_index, matrix_index)
+                if shap_values is not None and validate_shap_values(shap_values):
+                    explanation = generate_friendly_shap_explanation(shap_values, USER_ITEM_MATRIX.columns.tolist())
+                    rec["shap_explanation"] = {
+                        "top_features": explanation,
+                        "explanation": "These features had the highest impact on the recommendation."
+                    }
+                else:
+                    rec["shap_explanation"] = {
+                        "top_features": [],
+                        "explanation": "SHAP explanation could not be generated."
+                    }
+            except Exception as e:
+                print(f"Error generating SHAP explanation for item_id {rec['item_id']}: {e}")
+                rec["shap_explanation"] = {
+                    "top_features": [],
+                    "explanation": "Error occurred while generating SHAP explanation."
+                }
+
+            # Ensure the `explanation` field is included in the recommendation
+            if "explanation" not in rec:
+                rec["explanation"] = rec["shap_explanation"].get("explanation", "No explanation available.")
+
+            # Debugging log: Check SHAP explanation structure
+            print(f"SHAP explanation for item_id {rec['item_id']}: {rec['shap_explanation']}")
+
+    # Helper function to validate SHAP values
     def validate_shap_values(shap_values):
         """
         Validate SHAP values to ensure they are a 2D NumPy array with numeric values.
@@ -811,131 +633,79 @@ def recommend_plan(user_input, priority="", ml_prediction_df=None):
             return False
         return True
 
-    def validate_feature_names(feature_names):
+    # Helper function to generate user-friendly SHAP explanations
+    def generate_friendly_shap_explanation(shap_values, feature_names):
         """
-        Validate feature names to ensure they are a list of strings.
+        Convert SHAP values into a user-friendly explanation.
+
+        Parameters:
+            shap_values (np.ndarray): SHAP values for the prediction.
+            feature_names (list): List of feature names corresponding to the SHAP values.
+
+        Returns:
+            list: A list of user-friendly explanations for the top features.
         """
-        if not isinstance(feature_names, list):
-            print(f"Feature names are not a list: {type(feature_names)}")  # Debugging log
-            return False
-        if not all(isinstance(name, str) for name in feature_names):
-            print(f"Feature names contain non-string elements: {feature_names}")  # Debugging log
-            return False
-        return True
+        feature_mapping = {
+            "item": "Plan Characteristics (e.g., flexibility, coverage)",
+            "user": "Your Preferences (e.g., age, income, health status)",
+            "age": "Your Age Group",
+            "income": "Your Income Level",
+            "bmi": "Your BMI Category",
+            "smoker": "Smoking Status",
+            "chronic_condition": "Chronic Condition Status",
+            # Add more mappings as needed
+        }
 
-    def validate_shap_explanation(explanation):
-        """
-        Validate SHAP explanation to ensure it is a list of dictionaries with numeric 'impact' values.
-        """
-        if not isinstance(explanation, list):
-            print(f"Invalid explanation format: {explanation} (not a list)")  # Debugging log
-            return False
-        for entry in explanation:
-            if not isinstance(entry, dict):
-                print(f"Invalid explanation entry: {entry} (not a dictionary)")  # Debugging log
-                return False
-            if "feature" not in entry or "impact" not in entry:
-                print(f"Missing keys in explanation entry: {entry}")  # Debugging log
-                return False
-            if not isinstance(entry["feature"], str):
-                print(f"Invalid feature type in explanation entry: {entry}")  # Debugging log
-                return False
-            if not isinstance(entry["impact"], (int, float)):
-                print(f"Invalid impact type in explanation entry: {entry}")  # Debugging log
-                return False
-        return True
+        # Ensure feature_names is valid
+        if not isinstance(feature_names, list) or not all(isinstance(name, str) for name in feature_names):
+            print(f"Invalid feature names: {feature_names}")  # Debugging log
+            return []
 
-    # Step 5: SHAP Explanations for NCF Predictions
-    valid_item_ids = set(item_id_to_matrix_index.keys())  # Get valid item IDs from the matrix
-    for rec in recommendations:
-        try:
-            # Ensure the item_id corresponds to a valid matrix index
-            if rec["item_id"] not in valid_item_ids:
-                print(f"Skipping SHAP explanation for invalid item_id: {rec['item_id']}")  # Debugging log
-                rec["explanation"] = "Invalid item_id for SHAP explanation."
-                continue
+        # Sort features by absolute SHAP value (impact)
+        top_features = sorted(
+            enumerate(shap_values[0]), key=lambda x: abs(x[1]), reverse=True
+        )[:3]  # Top 3 features
 
-            matrix_index = item_id_to_matrix_index[rec["item_id"]]
-            if matrix_index >= USER_ITEM_MATRIX.shape[1]:  # Validate matrix index range
-                print(f"Matrix index {matrix_index} out of range for item_id: {rec['item_id']}")  # Debugging log
-                rec["explanation"] = (
-                    f"Matrix index {matrix_index} is out of range for the user-item matrix. "
-                    "This item may not be represented in the matrix."
-                )
-                continue
+        explanation = []
+        for i, impact in top_features:
+            feature_name = feature_names[i]
+            friendly_name = feature_mapping.get(feature_name, feature_name)  # Use friendly name if available
+            explanation.append({
+                "feature": friendly_name,
+                "impact": round(float(impact), 4),
+                "description": f"The feature '{friendly_name}' contributed {round(float(impact), 4)} to this recommendation."
+            })
 
-            # Generate SHAP values
-            shap_values = explain_ncf_predictions(NCF_MODEL, USER_ITEM_MATRIX, user_index, matrix_index)
-            print(f"SHAP values for item_id {rec['item_id']}: {shap_values}")  # Debugging log
+        return explanation
 
-            # Validate SHAP values
-            if not isinstance(shap_values, np.ndarray) or shap_values.ndim != 2:
-                print(f"Invalid SHAP values for item_id {rec['item_id']}: {shap_values}")  # Debugging log
-                rec["explanation"] = "Invalid SHAP values."
-                continue
-
-            # Ensure feature names are valid
-            feature_names = USER_ITEM_MATRIX.columns.tolist()
-            if not validate_feature_names(feature_names):
-                print(f"Invalid feature names: {feature_names}")  # Debugging log
-                rec["explanation"] = "Invalid feature names."
-                continue
-
-            # Simplify SHAP explanations for users
-            top_features = sorted(
-                enumerate(shap_values[0]), key=lambda x: abs(x[1]), reverse=True
-            )[:3]  # Top 3 features
-            explanation = [
-                {"feature": feature_names[i], "impact": round(float(impact), 4)}
-                for i, impact in top_features if isinstance(impact, (int, float))
-            ]
-
-            # Validate SHAP explanation
-            if validate_shap_explanation(explanation):
-                rec["explanation"] = explanation
-            else:
-                rec["explanation"] = "Invalid SHAP explanation format."
-            print(f"Generated SHAP explanation for item_id {rec['item_id']}: {rec['explanation']}")  # Debugging log
-        except Exception as e:
-            print(f"Error generating SHAP explanation for item {rec['item_id']}: {e}")  # Debugging log
-            rec["explanation"] = "Error occurred while generating SHAP explanation."
+    add_shap_explanations(recommendations, user_index)
 
     # Ensure all recommendations are JSON-serializable
-    for rec in recommendations:
+    for rec in final_recommendations:
         try:
-            print(f"Before serialization: {rec}")  # Debugging log
-            rec["score"] = float(rec["score"]) if rec.get("score") is not None else 0.0  # Handle None values
-            rec["similarity_score"] = float(rec["similarity_score"]) if rec.get("similarity_score") is not None else 0.0  # Handle None values
+            # Skip disclaimer recommendations
+            if rec["priority"] == "disclaimer":
+                continue
+
+            # Ensure `item_id` exists
+            if "item_id" not in rec:
+                print(f"Error: Missing `item_id` in recommendation before serialization: {rec}")  # Debugging log
+                rec["item_id"] = -1  # Add a placeholder `item_id` to prevent errors
+            rec["score"] = float(rec["score"]) if rec.get("score") is not None else 0.0
+            rec["similarity_score"] = float(rec["similarity_score"]) if rec.get("similarity_score") is not None else 0.0
             if "explanation" in rec and isinstance(rec["explanation"], list):
-                # Ensure explanation is JSON-serializable
                 rec["explanation"] = [
                     {"feature": str(entry["feature"]), "impact": float(entry["impact"])}
                     for entry in rec["explanation"]
                 ]
-            print(f"After serialization: {rec}")  # Debugging log
         except Exception as e:
-            print(f"Error serializing recommendation {rec}: {e}")  # Debugging log
+            print(f"Error serializing recommendation: {rec}, Error: {e}")  # Debugging log
             rec["explanation"] = "Error serializing explanation."
 
-    # Validate the final recommendations list
-    try:
-        print("Validating final recommendations...")  # Debugging log
-        for rec in recommendations:
-            if not isinstance(rec, dict):
-                raise ValueError(f"Invalid recommendation format: {rec}")
-            if "plan" not in rec or "justification" not in rec or "priority" not in rec:
-                raise ValueError(f"Missing keys in recommendation: {rec}")
-            if "explanation" in rec and not isinstance(rec["explanation"], (list, str)):
-                raise ValueError(f"Invalid explanation format in recommendation: {rec}")
-        print("Final recommendations validated successfully.")  # Debugging log
-    except Exception as e:
-        print(f"Error validating recommendations: {e}")  # Debugging log
-        return [{
-            "plan": "No plan available",
-            "justification": "An error occurred while validating recommendations.",
-            "priority": "error"
-        }]
+    # Debugging log: Check recommendations after serialization
+    print("Recommendations after serialization:", final_recommendations)
 
-    # Debugging log: Final recommendations
-    print("Final recommendations:", recommendations)  # Debugging log
-    return recommendations
+    # Debugging log: Check recommendations before returning
+    print("Final recommendations before returning:", final_recommendations)
+
+    return final_recommendations
