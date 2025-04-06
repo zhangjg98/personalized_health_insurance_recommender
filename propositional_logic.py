@@ -567,16 +567,24 @@ def recommend_plan(user_input, priority="", ml_prediction_df=None):
     def add_shap_explanations(recommendations, user_index):
         valid_item_ids = set(item_id_to_matrix_index.keys())
         for rec in recommendations:
-            # Skip disclaimer recommendations
-            if rec["priority"] == "disclaimer":
+            # Debugging log: Check priority and plan
+            print(f"Processing recommendation for SHAP: {rec.get('plan', 'Unknown Plan')} with priority: {rec.get('priority')}")
+
+            # Ensure SHAP generation is only for non-rule-based plans
+            if rec.get("priority") not in ["content-based", "collaborative filtering"]:
+                print(f"Skipping SHAP explanation for rule-based recommendation: {rec.get('plan', 'Unknown Plan')} with priority: {rec.get('priority')}")  # Debugging log
+                # Remove SHAP explanation for rule-based recommendations
+                rec.pop("shap_explanation", None)
+                rec["explanation"] = None  # Ensure explanation is not set for rule-based plans
                 continue
 
             try:
-                if rec["item_id"] not in valid_item_ids:
+                if rec.get("item_id") not in valid_item_ids:
                     rec["shap_explanation"] = {
                         "top_features": [],
                         "explanation": "Invalid item_id for SHAP explanation."
                     }
+                    rec["explanation"] = rec["shap_explanation"]["explanation"]  # Set explanation from shap_explanation
                     continue
 
                 matrix_index = item_id_to_matrix_index[rec["item_id"]]
@@ -585,6 +593,7 @@ def recommend_plan(user_input, priority="", ml_prediction_df=None):
                         "top_features": [],
                         "explanation": "Matrix index out of range."
                     }
+                    rec["explanation"] = rec["shap_explanation"]["explanation"]  # Set explanation from shap_explanation
                     continue
 
                 # Generate SHAP values
@@ -595,24 +604,23 @@ def recommend_plan(user_input, priority="", ml_prediction_df=None):
                         "top_features": explanation,
                         "explanation": "These features had the highest impact on the recommendation."
                     }
+                    rec["explanation"] = rec["shap_explanation"]["explanation"]  # Set explanation from shap_explanation
                 else:
                     rec["shap_explanation"] = {
                         "top_features": [],
                         "explanation": "SHAP explanation could not be generated."
                     }
+                    rec["explanation"] = rec["shap_explanation"]["explanation"]  # Set explanation from shap_explanation
             except Exception as e:
-                print(f"Error generating SHAP explanation for item_id {rec['item_id']}: {e}")
+                print(f"Error generating SHAP explanation for item_id {rec.get('item_id')}: {e}")
                 rec["shap_explanation"] = {
                     "top_features": [],
                     "explanation": "Error occurred while generating SHAP explanation."
                 }
-
-            # Ensure the `explanation` field is included in the recommendation
-            if "explanation" not in rec:
-                rec["explanation"] = rec["shap_explanation"].get("explanation", "No explanation available.")
+                rec["explanation"] = rec["shap_explanation"]["explanation"]  # Set explanation from shap_explanation
 
             # Debugging log: Check SHAP explanation structure
-            print(f"SHAP explanation for item_id {rec['item_id']}: {rec['shap_explanation']}")
+            print(f"SHAP explanation for item_id {rec.get('item_id')}: {rec['shap_explanation']}")
 
     # Helper function to validate SHAP values
     def validate_shap_values(shap_values):
@@ -680,13 +688,20 @@ def recommend_plan(user_input, priority="", ml_prediction_df=None):
 
     add_shap_explanations(recommendations, user_index)
 
+    def remove_disclaimer_for_user_selected(recommendations):
+        """
+        Remove disclaimers from user-selected recommendations.
+        """
+        for rec in recommendations:
+            if rec.get("priority") == "user-selected":
+                rec.pop("disclaimer_note", None)
+
+    # Ensure disclaimers are removed for user-selected plans
+    remove_disclaimer_for_user_selected(recommendations)
+
     # Ensure all recommendations are JSON-serializable
     for rec in final_recommendations:
         try:
-            # Skip disclaimer recommendations
-            if rec["priority"] == "disclaimer":
-                continue
-
             # Ensure `item_id` exists
             if "item_id" not in rec:
                 print(f"Error: Missing `item_id` in recommendation before serialization: {rec}")  # Debugging log
