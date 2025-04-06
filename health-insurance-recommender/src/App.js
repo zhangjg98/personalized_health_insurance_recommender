@@ -29,6 +29,7 @@ function App() {
   const [selectedFeedback, setSelectedFeedback] = useState(null); // Track selected feedback ("Yes" or "No")
   const [selectedRecommendation, setSelectedRecommendation] = useState(""); // Track selected recommendation
   const [specificFeedbackGiven, setSpecificFeedbackGiven] = useState(false); // Track specific feedback submission
+  const [disclaimer, setDisclaimer] = useState(""); // Track disclaimer
 
   const handleChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
@@ -56,10 +57,20 @@ function App() {
       }
 
       const data = await response.json();
-      setRecommendations(data.recommendations || []); // Update to handle multiple recommendations
+      const sortedRecommendations = (data.recommendations || []).sort((a, b) => {
+        if (a.priority === "strongly recommended" && b.priority !== "strongly recommended") {
+          return -1;
+        }
+        if (a.priority !== "strongly recommended" && b.priority === "strongly recommended") {
+          return 1;
+        }
+        return 0;
+      });
+      setRecommendations(sortedRecommendations); // Ensure "Strongly Recommended" plans appear first
       setMlSummary(data.ml_summary);
       setMlData(data.ml_prediction);
       setOutlierMessage(data.outlier_message || "");
+      setDisclaimer(data.disclaimer || ""); // Set disclaimer
     } catch (err) {
       setError(err.message);
     }
@@ -174,6 +185,10 @@ const logSpecificPlanFeedback = async () => {
   };
 
   useEffect(() => {}, [mlData, recommendations, mlSummary, outlierMessage]);
+
+  useEffect(() => {
+    console.log("Recommendations received:", recommendations); // Debugging log
+  }, [recommendations]);
 
   return (
     <Container className="mt-4">
@@ -420,32 +435,28 @@ const logSpecificPlanFeedback = async () => {
                     <Card.Text><em>{rec.justification}</em></Card.Text>
                     <Card.Text>
                       <strong>Explanation:</strong>{" "}
-                      {rec.explanation ? (
-                        <ul>
-                          {rec.explanation.top_features.map((feature, index) => (
-                            <li key={index}>
-                              <strong>{feature[0]}:</strong> Impact {feature[1]}
-                            </li>
-                          ))}
-                        </ul>
-                      ) : (
-                        "No explanation available."
-                      )}
+                      {rec.explanation || "No explanation available."}
                     </Card.Text>
                     <Card.Text>
                       <strong>SHAP Explanation:</strong>{" "}
-                      {rec.shap_explanation && rec.shap_explanation.top_features ? (
+                      {rec.shap_explanation && rec.shap_explanation.top_features.length > 0 ? (
                         <ul>
                           {rec.shap_explanation.top_features.map((feature, index) => (
                             <li key={index}>
-                              <strong>{feature.feature}:</strong> Impact {feature.impact}
+                              <strong>{feature.feature}:</strong> Impact {feature.impact} -{" "}
+                              {feature.description || `The feature '${feature.feature}' contributed ${feature.impact} to this recommendation.`}
                             </li>
                           ))}
                         </ul>
                       ) : (
-                        "No SHAP explanation available."
+                        rec.shap_explanation?.explanation || "No SHAP explanation available."
                       )}
                     </Card.Text>
+                    {rec.disclaimer_note && (
+                      <Alert variant="info">
+                        <strong>Disclaimer:</strong> {rec.disclaimer_note}
+                      </Alert>
+                    )}
                     {formData.preferred_plan_type && rec.plan.includes(formData.preferred_plan_type) && (
                       <Alert variant="info">
                         This recommendation matches your preferred plan type: {formData.preferred_plan_type}.
@@ -456,7 +467,7 @@ const logSpecificPlanFeedback = async () => {
               </div>
             ))}
 
-            {/* Show feedback section only if there are valid recommendations */}
+            {/* Feedback Section */}
             {recommendations.some((rec) => rec.priority !== "insufficient_criteria" && rec.priority !== "warning") && (
               <div className="mt-3">
                 <h5>Was this recommendation helpful?</h5>
@@ -575,6 +586,12 @@ const logSpecificPlanFeedback = async () => {
             <Card.Text>{outlierMessage}</Card.Text>
           </Card.Body>
         </Card>
+      )}
+
+      {disclaimer && (
+        <Alert variant="info" className="mt-4">
+          <strong>Disclaimer:</strong> {disclaimer}
+        </Alert>
       )}
     </Container>
   );
