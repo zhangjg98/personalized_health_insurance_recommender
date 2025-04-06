@@ -66,7 +66,16 @@ function App() {
         }
         return 0;
       });
-      setRecommendations(sortedRecommendations); // Ensure "Strongly Recommended" plans appear first
+
+      // Filter out SHAP explanations for rule-based recommendations
+      const filteredRecommendations = sortedRecommendations.map((rec) => {
+        if (rec.priority !== "content-based" && rec.priority !== "collaborative filtering") {
+          rec.shap_explanation = null; // Remove SHAP explanation for rule-based plans
+        }
+        return rec;
+      });
+
+      setRecommendations(filteredRecommendations); // Ensure "Strongly Recommended" plans appear first
       setMlSummary(data.ml_summary);
       setMlData(data.ml_prediction);
       setOutlierMessage(data.outlier_message || "");
@@ -433,13 +442,16 @@ const logSpecificPlanFeedback = async () => {
                       <strong>{rec.priority === "strongly recommended" ? "Strongly Recommended:" : "Recommended:"}</strong> {rec.plan}
                     </Card.Text>
                     <Card.Text><em>{rec.justification}</em></Card.Text>
-                    <Card.Text>
-                      <strong>Explanation:</strong>{" "}
-                      {rec.explanation || "No explanation available."}
-                    </Card.Text>
-                    <Card.Text>
-                      <strong>SHAP Explanation:</strong>{" "}
-                      {rec.shap_explanation && rec.shap_explanation.top_features.length > 0 ? (
+                    {/* Render Explanation only if it exists and is not "No explanation available" */}
+                    {rec.explanation && rec.explanation !== "No explanation available." && (
+                      <Card.Text>
+                        <strong>Explanation:</strong> {rec.explanation}
+                      </Card.Text>
+                    )}
+                    {/* Render SHAP Explanation only if it exists and is not "No SHAP explanation available" */}
+                    {rec.shap_explanation && rec.shap_explanation.top_features.length > 0 ? (
+                      <Card.Text>
+                        <strong>SHAP Explanation:</strong>
                         <ul>
                           {rec.shap_explanation.top_features.map((feature, index) => (
                             <li key={index}>
@@ -448,10 +460,15 @@ const logSpecificPlanFeedback = async () => {
                             </li>
                           ))}
                         </ul>
-                      ) : (
-                        rec.shap_explanation?.explanation || "No SHAP explanation available."
-                      )}
-                    </Card.Text>
+                      </Card.Text>
+                    ) : (
+                      rec.shap_explanation?.explanation &&
+                      rec.shap_explanation.explanation !== "No SHAP explanation available." && (
+                        <Card.Text>
+                          <strong>SHAP Explanation:</strong> {rec.shap_explanation.explanation}
+                        </Card.Text>
+                      )
+                    )}
                     {rec.disclaimer_note && (
                       <Alert variant="info">
                         <strong>Disclaimer:</strong> {rec.disclaimer_note}
