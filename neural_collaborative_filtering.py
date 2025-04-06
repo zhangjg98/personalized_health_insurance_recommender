@@ -156,6 +156,7 @@ def explain_ncf_predictions(model, user_item_matrix, user_id, item_id):
         print(f"Invalid item_id: {item_id}. Skipping SHAP explanation.")
         return None
 
+    print(f"Generating SHAP values for user_id {user_id}, item_id {item_id}")  # Debugging log
     try:
         # Convert user_item_matrix to a NumPy array if it's a DataFrame
         if isinstance(user_item_matrix, pd.DataFrame):
@@ -184,6 +185,7 @@ def explain_ncf_predictions(model, user_item_matrix, user_id, item_id):
 
         # Compute SHAP values
         shap_values = explainer(combined_inputs)
+        print(f"SHAP values generated: {shap_values.values}")  # Debugging log
         if shap_values.values is not None and len(shap_values.values) > 0:
             return shap_values.values
         else:
