@@ -168,8 +168,39 @@ def content_based_filtering(user_input, plans):
     for i, plan in enumerate(plans):
         plan['similarity_score'] = similarities[i]
 
+    # Apply hard constraints to filter out irrelevant plans
+    def violates_constraints(plan, user_input):
+        """
+        Check if a plan violates hard constraints based on user inputs.
+        """
+        # Exclude smoker plans for non-smokers
+        if user_input.get("smoker") == "no" and "smoker" in plan["description"].lower():
+            return True
+
+        # Exclude catastrophic plans for users not in the 18-29 age group
+        if user_input.get("age") != "young_adult" and "catastrophic" in plan["description"].lower():
+            return True
+
+        # Exclude chronic condition plans for users without chronic conditions
+        if user_input.get("chronic_condition") == "no" and "chronic" in plan["description"].lower():
+            return True
+
+        # Exclude demographic-based plans for users not in the specified demographic
+        ethnicity = user_input.get("ethnicity", "").lower()
+        if ethnicity != "black" and "african american" in plan["description"].lower():
+            return True
+        if ethnicity != "hispanic" and "hispanic" in plan["description"].lower():
+            return True
+        if user_input.get("gender") != "female" and "women" in plan["description"].lower():
+            return True
+
+        return False
+
+    # Filter out plans that violate constraints
+    filtered_plans = [plan for plan in plans if not violates_constraints(plan, user_input)]
+
     # Sort plans by similarity score in descending order
-    ranked_plans = sorted(plans, key=lambda x: x['similarity_score'], reverse=True)
+    ranked_plans = sorted(filtered_plans, key=lambda x: x['similarity_score'], reverse=True)
     return ranked_plans
 
 def visualize_shap_summary(model, user_item_matrix):
