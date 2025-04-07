@@ -16,7 +16,26 @@ USER_ITEM_MATRIX = None
 def load_ncf_resources():
     global NCF_MODEL, USER_ITEM_MATRIX
     if NCF_MODEL is None or USER_ITEM_MATRIX is None:
-        NCF_MODEL, USER_ITEM_MATRIX = load_ncf_model()
+        try:
+            # Load the user-item matrix to determine dimensions
+            USER_ITEM_MATRIX = pd.read_csv("user_item_matrix.csv", index_col=0)
+            num_users, num_items = USER_ITEM_MATRIX.shape
+
+            # Pass dimensions to load_ncf_model
+            NCF_MODEL = load_ncf_model(
+                model_path="ncf_model.pth",
+                num_users=num_users,
+                num_items=num_items,
+                latent_dim=50,
+                hidden_dim=128
+            )
+            print("NCF model and user-item matrix loaded successfully.")  # Debugging log
+        except FileNotFoundError:
+            raise FileNotFoundError("The user_item_matrix.csv file was not found. Ensure it exists before starting the application.")
+        except ValueError as e:
+            raise ValueError(f"Error loading NCF model: {e}")
+        except Exception as e:
+            raise RuntimeError(f"Unexpected error loading NCF resources: {e}")
 
 def get_or_create_item(plan_name, plan_description):
     """
@@ -52,6 +71,21 @@ def recommend_plan(user_input, priority="", ml_prediction_df=None):
     # Debugging log: Check mappings
     print("Matrix index to item_id mapping:", matrix_index_to_item_id)
     print("Item_id to matrix index mapping:", item_id_to_matrix_index)
+
+    # Verify that all items in the matrix have interactions
+    valid_item_ids = set(USER_ITEM_MATRIX.columns)
+    interactions = Interaction.query.all()
+    interaction_item_ids = {i.item_id for i in interactions}
+
+    # Log items with interactions but missing from the matrix
+    missing_from_matrix = interaction_item_ids - valid_item_ids
+    if missing_from_matrix:
+        print(f"Warning: The following item_ids have interactions but are missing from the user-item matrix: {missing_from_matrix}")
+
+    # Log items in the matrix but without interactions
+    missing_interactions = valid_item_ids - interaction_item_ids
+    if missing_interactions:
+        print(f"Warning: The following item_ids are in the user-item matrix but have no interactions: {missing_interactions}")
 
     # Extract user inputs
     user_id = user_input.get("user_id", -1)
@@ -497,21 +531,38 @@ def recommend_plan(user_input, priority="", ml_prediction_df=None):
         print("Filtered plans:", filtered_plans)
 
         # Step 2: Perform content-based filtering with hard constraints
-        ranked_plans = content_based_filtering(user_input, filtered_plans)
+        plans = [{"id": item.id, "name": item.name, "description": item.description} for item in Item.query.all()]
+        filtered_plans = filter_irrelevant_plans(user_input, plans)
 
-        # Limit to the top-ranked content-based recommendation
-        if ranked_plans:
-            top_plan = ranked_plans[0]
-            item_id = top_plan.get("id")  # Ensure item_id is set
-            if item_id is not None:
-                recommendations.append({
-                    "item_id": item_id,
-                    "plan": top_plan.get("name"),
-                    "justification": top_plan.get("description"),
-                    "similarity_score": top_plan.get("similarity_score"),
-                    "priority": "content-based",
-                    "disclaimer_note": "These plans are generated using advanced filtering techniques to provide additional insights."
-                })
+        # Debugging log: Check filtered plans
+        print("Filtered plans:", filtered_plans)
+
+        # Step 2.1: Validate plans against the user-item matrix
+        valid_item_ids = set(USER_ITEM_MATRIX.columns)
+        filtered_plans = [plan for plan in filtered_plans if plan["id"] in valid_item_ids]
+
+        # Debugging log: Check valid plans after filtering against the matrix
+        print("Valid plans after filtering against the user-item matrix:", filtered_plans)
+
+        # Step 2.2: Perform content-based filtering
+        if not filtered_plans:
+            print("No valid plans found after filtering against the user-item matrix.")  # Debugging log
+        else:
+            ranked_plans = content_based_filtering(user_input, filtered_plans)
+
+            # Limit to the top-ranked content-based recommendation
+            if ranked_plans:
+                top_plan = ranked_plans[0]
+                item_id = top_plan.get("id")  # Ensure item_id is set
+                if item_id is not None:
+                    recommendations.append({
+                        "item_id": item_id,
+                        "plan": top_plan.get("name"),
+                        "justification": top_plan.get("description"),
+                        "similarity_score": top_plan.get("similarity_score"),
+                        "priority": "content-based",
+                        "disclaimer_note": "These plans are generated using advanced filtering techniques to provide additional insights."
+                    })
 
         # Debugging log: Check recommendations after limiting content-based filtering
         print("Recommendations after limiting content-based filtering:", recommendations)
@@ -527,7 +578,14 @@ def recommend_plan(user_input, priority="", ml_prediction_df=None):
                 for rec in recommendations:
                     item_id = rec.get("item_id")
                     matrix_index = item_id_to_matrix_index.get(item_id)
-                    if matrix_index is not None and matrix_index in predicted_scores:
+
+                    # Verify if the item_id is in the matrix
+                    if matrix_index is None or item_id not in valid_item_ids:
+                        print(f"Warning: item_id {item_id} is not in the user-item matrix. Skipping.")
+                        rec["score"] = 0
+                        continue
+
+                    if matrix_index in predicted_scores:
                         rec["score"] = predicted_scores[matrix_index]
                         # Ensure only one disclaimer is added
                         if "disclaimer_note" not in rec:
@@ -536,7 +594,7 @@ def recommend_plan(user_input, priority="", ml_prediction_df=None):
                         rec["score"] = 0
 
                 recommendations = [
-                    rec for rec in recommendations if rec.get("item_id") in item_id_to_matrix_index
+                    rec for rec in recommendations if rec.get("item_id") in valid_item_ids
                 ]
                 recommendations.sort(key=lambda x: x["score"], reverse=True)
                 return recommendations
@@ -549,9 +607,26 @@ def recommend_plan(user_input, priority="", ml_prediction_df=None):
         # Debugging log: Check recommendations after collaborative filtering
         print("Recommendations after collaborative filtering:", recommendations)
 
+    # Filter recommendations to include only items present in the matrix for collaborative/content-based filtering
+    valid_item_ids = set(USER_ITEM_MATRIX.columns)
+    filtered_recommendations = []
+    for rec in recommendations:
+        if rec.get("priority") in ["content-based", "collaborative filtering"]:
+            # Only filter collaborative/content-based recommendations
+            if rec.get("item_id") in valid_item_ids:
+                filtered_recommendations.append(rec)
+            else:
+                print(f"Skipping recommendation for item_id {rec.get('item_id')} as it is not in the user-item matrix.")
+        else:
+            # Include rule-based recommendations without filtering
+            filtered_recommendations.append(rec)
+
+    # Debugging log: Check filtered recommendations
+    print("Filtered recommendations:", filtered_recommendations)
+
     # Limit the number of recommendations displayed to the user
     MAX_RECOMMENDATIONS = 3
-    final_recommendations = remove_duplicates(recommendations)[:MAX_RECOMMENDATIONS]
+    final_recommendations = remove_duplicates(filtered_recommendations)[:MAX_RECOMMENDATIONS]
 
     # Fallback if no recommendations exist
     if not final_recommendations:
