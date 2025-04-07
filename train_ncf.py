@@ -30,10 +30,35 @@ if user_item_matrix.isnull().values.any():
 if not pd.api.types.is_numeric_dtype(user_item_matrix.values):
     raise ValueError("The user-item matrix contains non-numeric values. Please clean the data before training.")
 
+# Remove duplicate columns by aggregating their values (e.g., taking the mean)
+user_item_matrix = user_item_matrix.groupby(user_item_matrix.columns, axis=1).mean()
+
+# Debugging log: Check aggregated column names
+print("Aggregated column names:", user_item_matrix.columns)
+
+# Ensure all column names are integers
+try:
+    user_item_matrix.columns = user_item_matrix.columns.map(lambda x: int(float(x)) if isinstance(x, str) and x.replace('.', '', 1).isdigit() else x)
+except ValueError as e:
+    print(f"Error: Invalid column names in user-item matrix: {user_item_matrix.columns}")  # Debugging log
+    raise ValueError("All column names in the user-item matrix must be valid integers.") from e
+
+# Debugging log: Check sanitized column names
+print("Sanitized column names:", user_item_matrix.columns)
+
+# Validate column names in the user-item matrix
+try:
+    valid_item_ids = set(map(int, user_item_matrix.columns))  # Convert column names to integers
+except ValueError as e:
+    print(f"Error: Invalid column names in user-item matrix: {user_item_matrix.columns}")  # Debugging log
+    raise ValueError("All column names in the user-item matrix must be valid integers.") from e
+
+# Debugging log: Check valid item IDs
+print("Valid item IDs:", valid_item_ids)
+
 # Use the standalone Flask app context for database queries
 with app.app_context():
     # Verify that all items in the matrix have interactions
-    valid_item_ids = set(map(int, user_item_matrix.columns))  # Convert column names to integers
     interactions = Interaction.query.all()
     interaction_item_ids = {i.item_id for i in interactions}
 
@@ -53,7 +78,7 @@ with app.app_context():
         raise ValueError("No valid items with interactions found. Ensure the user-item matrix and interactions are consistent.")
 
     # Filter the matrix to include only items with interactions
-    user_item_matrix = user_item_matrix.loc[:, user_item_matrix.columns.isin(map(str, active_item_ids))]
+    user_item_matrix = user_item_matrix.loc[:, user_item_matrix.columns.isin(active_item_ids)]
     print(f"Filtered user-item matrix shape: {user_item_matrix.shape}")  # Debugging log
 
 # Stop if the matrix is empty after filtering
