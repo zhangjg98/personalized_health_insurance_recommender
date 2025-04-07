@@ -46,26 +46,30 @@ def train_and_save_model(user_item_matrix, latent_dim=50, hidden_dim=128, epochs
     print(f"Model saved to {model_path}")
     return model
 
-def load_ncf_model(model_path="ncf_model.pth", latent_dim=50, hidden_dim=128):
-    # Load the correct user-item matrix
-    user_item_matrix = pd.read_csv("user_item_matrix.csv", index_col=0)
-    num_users, num_items = user_item_matrix.shape
+def load_ncf_model(model_path="ncf_model.pth", num_users=None, num_items=None, latent_dim=50, hidden_dim=128):
+    """
+    Load the Neural Collaborative Filtering model from a saved checkpoint.
+    """
+    print(f"Loading NCF model from {model_path}...")  # Debugging log
 
-    # Validate the dimensions of the user-item matrix
-    print(f"User-item matrix dimensions: {num_users} users, {num_items} items")
+    # Validate num_users and num_items
+    if num_users is None or num_items is None:
+        raise ValueError("num_users and num_items must be provided to initialize the model.")
 
-    model = NeuralCollaborativeFiltering(num_users, num_items, latent_dim, hidden_dim)
+    # Initialize the model with the current dimensions
+    model = NeuralCollaborativeFiltering(num_users=num_users, num_items=num_items, latent_dim=latent_dim, hidden_dim=hidden_dim)
+
     try:
+        # Attempt to load the saved model
         model.load_state_dict(torch.load(model_path))
-        model.eval()
-        print("Model loaded successfully.")
+        print("Model loaded successfully.")  # Debugging log
     except RuntimeError as e:
+        # Handle dimension mismatch errors
         raise RuntimeError(
-            f"Model dimensions do not match the current user-item matrix. "
-            f"Retrain the model to fix this issue. Error: {e}"
+            f"Model dimensions do not match the current user-item matrix. Retrain the model to fix this issue. Error: {e}"
         )
 
-    return model, user_item_matrix
+    return model
 
 def predict_user_item_interactions(model, user_item_matrix, user_id, top_k=5):
     print("Starting predict_user_item_interactions function...")  # Debugging log
