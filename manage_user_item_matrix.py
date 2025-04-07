@@ -1,6 +1,6 @@
 import os
 import pandas as pd
-from flask_backend import app, db, Interaction
+from flask_backend import app, db, Interaction, Item
 import argparse
 from multiprocessing import resource_tracker
 import platform
@@ -16,6 +16,7 @@ def manage_user_item_matrix(mode="generate"):
         mode (str): "generate" to create the matrix from scratch, "update" to update it incrementally.
     """
     with app.app_context():
+        # Step 1: Query interactions and validate item_id values
         interactions = Interaction.query.all()
         data = [(i.user_id, i.item_id, i.rating) for i in interactions]
         if not data:
@@ -26,15 +27,33 @@ def manage_user_item_matrix(mode="generate"):
         print("Interactions DataFrame:")
         print(df.head())  # Debugging log
 
-        # Aggregate duplicate entries by taking the average rating
-        df = df.groupby(['user_id', 'item_id'], as_index=False).mean()
+        # Validate item_id values against the items table
+        valid_item_ids = set(item.id for item in Item.query.all())
+        df = df[df['item_id'].isin(valid_item_ids)]
+        print(f"Filtered interactions to include only valid item_id values. Remaining rows: {len(df)}")
+
+        # Aggregate duplicate entries by taking the most recent rating (if timestamp exists) or the average
+        if 'timestamp' in df.columns:
+            df = df.sort_values('timestamp').groupby(['user_id', 'item_id'], as_index=False).last()
+        else:
+            df = df.groupby(['user_id', 'item_id'], as_index=False).mean()
+
+        # Include only items with interactions
+        active_item_ids = df['item_id'].unique()
+        print(f"Active item IDs with interactions: {active_item_ids}")
+
+        # Log items in the database but without interactions
+        all_item_ids = set(item.id for item in Item.query.all())
+        missing_interactions = all_item_ids - set(active_item_ids)
+        if missing_interactions:
+            print(f"Warning: The following item_ids are in the database but have no interactions: {missing_interactions}")
 
         if mode == "generate":
-            # Generate the user-item matrix from scratch
+            # Step 2: Generate the user-item matrix from scratch
             print("Generating user-item matrix from scratch...")
-            user_item_matrix = df.pivot(index='user_id', columns='item_id', values='rating').fillna(0)
+            user_item_matrix = df.pivot(index='user_id', columns='item_id', values='rating').reindex(columns=active_item_ids, fill_value=0)
         elif mode == "update":
-            # Update the existing user-item matrix
+            # Step 3: Update the existing user-item matrix
             print("Updating user-item matrix...")
             try:
                 # Load the existing matrix
@@ -42,21 +61,24 @@ def manage_user_item_matrix(mode="generate"):
                 print("Existing user-item matrix loaded:")
                 print(user_item_matrix.head())  # Debugging log
 
+                # Add missing columns for new items
+                for item_id in active_item_ids:
+                    if item_id not in user_item_matrix.columns:
+                        user_item_matrix[item_id] = 0
+
                 # Update the matrix with new interactions
                 for _, row in df.iterrows():
                     user_id, item_id, rating = int(row['user_id']), int(row['item_id']), row['rating']
                     if user_id not in user_item_matrix.index:
                         user_item_matrix.loc[user_id] = 0  # Add new user row
-                    if item_id not in user_item_matrix.columns:
-                        user_item_matrix[item_id] = 0  # Add new item column
                     user_item_matrix.loc[user_id, item_id] = rating  # Update the rating
             except FileNotFoundError:
                 print("No existing user-item matrix found. Generating from scratch...")
-                user_item_matrix = df.pivot(index='user_id', columns='item_id', values='rating').fillna(0)
+                user_item_matrix = df.pivot(index='user_id', columns='item_id', values='rating').reindex(columns=active_item_ids, fill_value=0)
         else:
             raise ValueError("Invalid mode. Use 'generate' or 'update'.")
 
-        # Save the user-item matrix to a CSV file
+        # Step 4: Save the user-item matrix to a CSV file
         if not user_item_matrix.empty:
             print("Final user-item matrix:")
             print(user_item_matrix.head())  # Debugging log
@@ -69,29 +91,13 @@ def manage_user_item_matrix(mode="generate"):
         print("Cleaning up leaked semaphore objects...")
         try:
             shared_memory_path = "/dev/shm" if platform.system() == "Linux" else "/private/var/run"
-            cleaned_semaphores = set()  # Track cleaned semaphores to avoid duplicate cleanup
             if os.path.exists(shared_memory_path):
-                print("Semaphores before cleanup:")
                 for semaphore in os.listdir(shared_memory_path):
                     if semaphore.startswith("sem."):
-                        print(semaphore)  # Debugging: List all semaphores
-                        if semaphore not in cleaned_semaphores:
-                            try:
-                                # Check if the semaphore exists in the resource_tracker's cache
-                                resource_tracker.unregister(f"{shared_memory_path}/{semaphore}", "semaphore")
-                                cleaned_semaphores.add(semaphore)  # Mark semaphore as cleaned
-                            except KeyError:
-                                # Suppress KeyError and log a message
-                                print(f"Semaphore {semaphore} was already unregistered or does not exist.")
-                            except Exception as e:
-                                # Suppress other exceptions and log a message
-                                print(f"Error cleaning semaphore {semaphore}: {e}")
-                print("Semaphores after cleanup:")
-                for semaphore in os.listdir(shared_memory_path):
-                    if semaphore.startswith("sem."):
-                        print(semaphore)  # Debugging: List remaining semaphores
-            else:
-                print(f"{shared_memory_path} does not exist. Skipping semaphore cleanup.")
+                        try:
+                            resource_tracker.unregister(f"{shared_memory_path}/{semaphore}", "semaphore")
+                        except KeyError:
+                            pass  # Suppress KeyError if semaphore does not exist
         except Exception as e:
             print(f"Error during semaphore cleanup: {e}")
         print("Semaphore cleanup completed.")
