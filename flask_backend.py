@@ -56,7 +56,24 @@ keys_for_thresholds = [
 dynamic_thresholds = unified_thresholds("processed_user_item_matrix.csv", keys_for_thresholds)
 
 # Load the NeuralCollaborativeFiltering model and user-item matrix
-NCF_MODEL, USER_ITEM_MATRIX = load_ncf_model()
+try:
+    # Load the user-item matrix to determine dimensions
+    USER_ITEM_MATRIX = pd.read_csv("user_item_matrix.csv", index_col=0)
+    num_users, num_items = USER_ITEM_MATRIX.shape
+
+    # Pass dimensions to load_ncf_model
+    NCF_MODEL = load_ncf_model(
+        model_path="ncf_model.pth",
+        num_users=num_users,
+        num_items=num_items,
+        latent_dim=50,
+        hidden_dim=128
+    )
+    print("NCF model and user-item matrix loaded successfully.")  # Debugging log
+except FileNotFoundError:
+    raise FileNotFoundError("The user_item_matrix.csv file was not found. Ensure it exists before starting the Flask app.")
+except ValueError as e:
+    raise ValueError(f"Error loading NCF model: {e}")
 
 @app.route('/')
 def home():
