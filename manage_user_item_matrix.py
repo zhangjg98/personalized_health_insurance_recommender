@@ -82,8 +82,39 @@ def manage_user_item_matrix(mode="generate"):
         if not user_item_matrix.empty:
             print("Final user-item matrix:")
             print(user_item_matrix.head())  # Debugging log
-            user_item_matrix.to_csv('user_item_matrix.csv')
-            print(f"User-item matrix saved to user_item_matrix.csv (mode: {mode}).")
+
+            # Remove duplicate columns by aggregating their values (e.g., taking the mean)
+            user_item_matrix = user_item_matrix.groupby(user_item_matrix.columns, axis=1).mean()
+
+            # Debugging log: Check aggregated column names
+            print("Aggregated column names:", user_item_matrix.columns)
+
+            # Ensure all column names are integers
+            user_item_matrix.columns = user_item_matrix.columns.map(lambda x: int(float(x)) if isinstance(x, str) and x.replace('.', '', 1).isdigit() else x)
+
+            # Debugging log: Check sanitized column names
+            print("Sanitized column names:", user_item_matrix.columns)
+
+            # Synchronize with the database
+            with app.app_context():
+                # Get all `item_ids` from the interactions table
+                interaction_item_ids = {i.item_id for i in Interaction.query.all()}
+
+                # Add missing `item_ids` to the matrix
+                missing_from_matrix = interaction_item_ids - set(user_item_matrix.columns)
+                for item_id in missing_from_matrix:
+                    user_item_matrix[item_id] = 0  # Add a column with default values (e.g., 0)
+
+                # Remove `item_ids` without interactions
+                missing_interactions = set(user_item_matrix.columns) - interaction_item_ids
+                user_item_matrix.drop(columns=missing_interactions, inplace=True)
+
+            # Debugging log: Check final column names
+            print("Final column names after synchronization:", user_item_matrix.columns)
+
+            # Save the updated matrix
+            user_item_matrix.to_csv("user_item_matrix.csv")
+            print("User-item matrix updated successfully.")
         else:
             print("User-item matrix is empty. No file was saved.")
 
