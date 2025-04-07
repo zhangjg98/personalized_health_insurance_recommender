@@ -60,6 +60,12 @@ def recommend_plan(user_input, priority="", ml_prediction_df=None):
     try:
         load_ncf_resources()
         print("NCF model and user-item matrix loaded successfully.")  # Debugging log
+
+        # Convert matrix column names to integers
+        USER_ITEM_MATRIX.columns = USER_ITEM_MATRIX.columns.map(int)
+
+        # Debugging log: Check sanitized column names
+        print("Sanitized column names in user-item matrix:", USER_ITEM_MATRIX.columns)
     except Exception as e:
         print(f"Error loading NCF resources: {e}")  # Debugging log
         raise
@@ -543,6 +549,17 @@ def recommend_plan(user_input, priority="", ml_prediction_df=None):
 
         # Debugging log: Check valid plans after filtering against the matrix
         print("Valid plans after filtering against the user-item matrix:", filtered_plans)
+
+        # Step 2.2: Log warnings for plans with no interactions but do not exclude them
+        plans_with_no_interactions = [plan for plan in filtered_plans if plan["id"] not in interaction_item_ids]
+        if plans_with_no_interactions:
+            print(f"Warning: The following plans exist in the user-item matrix but have no interactions: {[plan['id'] for plan in plans_with_no_interactions]}")
+
+        # Ensure all plans in the matrix are considered valid, even if they have no interactions
+        filtered_plans = [plan for plan in filtered_plans if plan["id"] in valid_item_ids]
+
+        # Debugging log: Final filtered plans
+        print("Final filtered plans after relaxing interaction-based validation:", filtered_plans)
 
         # Step 2.2: Perform content-based filtering
         if not filtered_plans:
