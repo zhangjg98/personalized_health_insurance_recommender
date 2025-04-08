@@ -442,33 +442,6 @@ const logSpecificPlanFeedback = async () => {
                       <strong>{rec.priority === "strongly recommended" ? "Strongly Recommended:" : "Recommended:"}</strong> {rec.plan}
                     </Card.Text>
                     <Card.Text><em>{rec.justification}</em></Card.Text>
-                    {/* Render Explanation only if it exists and is not "No explanation available" */}
-                    {rec.explanation && rec.explanation !== "No explanation available." && (
-                      <Card.Text>
-                        <strong>Explanation:</strong> {rec.explanation}
-                      </Card.Text>
-                    )}
-                    {/* Render SHAP Explanation only if it exists and is not "No SHAP explanation available" */}
-                    {rec.shap_explanation && rec.shap_explanation.top_features.length > 0 ? (
-                      <Card.Text>
-                        <strong>SHAP Explanation:</strong>
-                        <ul>
-                          {rec.shap_explanation.top_features.map((feature, index) => (
-                            <li key={index}>
-                              <strong>{feature.feature}:</strong> Impact {feature.impact} -{" "}
-                              {feature.description || `The feature '${feature.feature}' contributed ${feature.impact} to this recommendation.`}
-                            </li>
-                          ))}
-                        </ul>
-                      </Card.Text>
-                    ) : (
-                      rec.shap_explanation?.explanation &&
-                      rec.shap_explanation.explanation !== "No SHAP explanation available." && (
-                        <Card.Text>
-                          <strong>SHAP Explanation:</strong> {rec.shap_explanation.explanation}
-                        </Card.Text>
-                      )
-                    )}
                     {rec.disclaimer_note && (
                       <Alert variant="info">
                         <strong>Disclaimer:</strong> {rec.disclaimer_note}
