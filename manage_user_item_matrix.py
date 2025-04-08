@@ -1,155 +1,56 @@
-import os
 import pandas as pd
-from flask_backend import app, db, Interaction, Item
-import argparse
-from multiprocessing import resource_tracker
-import platform
-import warnings
+from database import db, Interaction
 
-warnings.filterwarnings("ignore", message="resource_tracker: There appear to be .* leaked semaphore objects")
-
-def manage_user_item_matrix(mode="generate"):
+def rebuild_user_item_matrix():
     """
-    Manage the user-item matrix by either generating it from scratch or updating it incrementally.
-
-    Parameters:
-        mode (str): "generate" to create the matrix from scratch, "update" to update it incrementally.
+    Rebuild the user-item matrix dynamically from the Interactions table.
     """
-    with app.app_context():
-        # Step 1: Query interactions and validate item_id values
-        interactions = Interaction.query.all()
-        data = [(i.user_id, i.item_id, i.rating) for i in interactions]
-        if not data:
-            print("No interactions found in the database.")
-            return
+    print("Rebuilding user-item matrix from Interactions table...")  # Debugging log
+    interactions = Interaction.query.all()
+    if not interactions:
+        print("No interactions found in the database. Returning an empty matrix.")  # Debugging log
+        return pd.DataFrame()
 
-        df = pd.DataFrame(data, columns=['user_id', 'item_id', 'rating'])
-        print("Interactions DataFrame:")
-        print(df.head())  # Debugging log
+    # Create a DataFrame from interactions
+    data = [(i.user_id, i.item_id, i.rating) for i in interactions]
+    df = pd.DataFrame(data, columns=["user_id", "item_id", "rating"])
 
-        # Validate item_id values against the items table
-        valid_item_ids = set(item.id for item in Item.query.all())
-        df = df[df['item_id'].isin(valid_item_ids)]
-        print(f"Filtered interactions to include only valid item_id values. Remaining rows: {len(df)}")
+    # Pivot the DataFrame to create the user-item matrix
+    user_item_matrix = df.pivot(index="user_id", columns="item_id", values="rating").fillna(0)
 
-        # Aggregate duplicate entries by taking the most recent rating (if timestamp exists) or the average
-        if 'timestamp' in df.columns:
-            df = df.sort_values('timestamp').groupby(['user_id', 'item_id'], as_index=False).last()
-        else:
-            df = df.groupby(['user_id', 'item_id'], as_index=False).mean()
+    # Debugging log: Check the shape of the rebuilt matrix
+    print(f"Rebuilt user-item matrix shape: {user_item_matrix.shape}")
+    return user_item_matrix
 
-        # Include only items with interactions
-        active_item_ids = df['item_id'].unique()
-        print(f"Active item IDs with interactions: {active_item_ids}")
+def validate_user_item_matrix(user_item_matrix):
+    """
+    Validate the user-item matrix for common issues.
+    """
+    if user_item_matrix.empty:
+        print("The user-item matrix is empty.")
+        return False
 
-        # Log items in the database but without interactions
-        all_item_ids = set(item.id for item in Item.query.all())
-        missing_interactions = all_item_ids - set(active_item_ids)
-        if missing_interactions:
-            print(f"Warning: The following item_ids are in the database but have no interactions: {missing_interactions}")
+    if user_item_matrix.shape[0] < 2 or user_item_matrix.shape[1] < 2:
+        print("The user-item matrix has insufficient rows or columns.")
+        return False
 
-        if mode == "generate":
-            # Step 2: Generate the user-item matrix from scratch
-            print("Generating user-item matrix from scratch...")
-            user_item_matrix = df.pivot(index='user_id', columns='item_id', values='rating').reindex(columns=active_item_ids, fill_value=0)
-        elif mode == "update":
-            # Step 3: Update the existing user-item matrix
-            print("Updating user-item matrix...")
-            try:
-                # Load the existing matrix
-                user_item_matrix = pd.read_csv('user_item_matrix.csv', index_col=0)
-                print("Existing user-item matrix loaded:")
-                print(user_item_matrix.head())  # Debugging log
+    print("The user-item matrix is valid.")
+    return True
 
-                # Add missing columns for new items
-                for item_id in active_item_ids:
-                    if item_id not in user_item_matrix.columns:
-                        user_item_matrix[item_id] = 0
-
-                # Update the matrix with new interactions
-                for _, row in df.iterrows():
-                    user_id, item_id, rating = int(row['user_id']), int(row['item_id']), row['rating']
-                    if user_id not in user_item_matrix.index:
-                        user_item_matrix.loc[user_id] = 0  # Add new user row
-                    user_item_matrix.loc[user_id, item_id] = rating  # Update the rating
-            except FileNotFoundError:
-                print("No existing user-item matrix found. Generating from scratch...")
-                user_item_matrix = df.pivot(index='user_id', columns='item_id', values='rating').reindex(columns=active_item_ids, fill_value=0)
-        else:
-            raise ValueError("Invalid mode. Use 'generate' or 'update'.")
-
-        # Step 4: Save the user-item matrix to a CSV file
-        if not user_item_matrix.empty:
-            print("Final user-item matrix:")
-            print(user_item_matrix.head())  # Debugging log
-
-            # Remove duplicate columns by aggregating their values (e.g., taking the mean)
-            user_item_matrix = user_item_matrix.groupby(user_item_matrix.columns, axis=1).mean()
-
-            # Debugging log: Check aggregated column names
-            print("Aggregated column names:", user_item_matrix.columns)
-
-            # Ensure all column names are integers
-            user_item_matrix.columns = user_item_matrix.columns.map(lambda x: int(float(x)) if isinstance(x, str) and x.replace('.', '', 1).isdigit() else x)
-
-            # Debugging log: Check sanitized column names
-            print("Sanitized column names:", user_item_matrix.columns)
-
-            # Synchronize with the database
-            with app.app_context():
-                # Get all `item_ids` from the interactions table
-                interaction_item_ids = {i.item_id for i in Interaction.query.all()}
-
-                # Add missing `item_ids` to the matrix
-                missing_from_matrix = interaction_item_ids - set(user_item_matrix.columns)
-                for item_id in missing_from_matrix:
-                    user_item_matrix[item_id] = 0  # Add a column with default values (e.g., 0)
-
-                # Remove `item_ids` without interactions
-                missing_interactions = set(user_item_matrix.columns) - interaction_item_ids
-                user_item_matrix.drop(columns=missing_interactions, inplace=True)
-
-            # Debugging log: Check final column names
-            print("Final column names after synchronization:", user_item_matrix.columns)
-
-            # Save the updated matrix
-            user_item_matrix.to_csv("user_item_matrix.csv")
-            print("User-item matrix updated successfully.")
-        else:
-            print("User-item matrix is empty. No file was saved.")
-
-        # Explicitly clean up semaphore objects
-        print("Cleaning up leaked semaphore objects...")
-        try:
-            shared_memory_path = "/dev/shm" if platform.system() == "Linux" else "/private/var/run"
-            if os.path.exists(shared_memory_path):
-                for semaphore in os.listdir(shared_memory_path):
-                    if semaphore.startswith("sem."):
-                        try:
-                            resource_tracker.unregister(f"{shared_memory_path}/{semaphore}", "semaphore")
-                        except KeyError:
-                            pass  # Suppress KeyError if semaphore does not exist
-        except Exception as e:
-            print(f"Error during semaphore cleanup: {e}")
-        print("Semaphore cleanup completed.")
-
-def encode_user_inputs(user_inputs):
-    """Convert user inputs into an encoded vector."""
-    # Example encoding logic (one-hot encoding or similar)
-    encoded_vector = []
-    age_mapping = {"18-29": [1, 0, 0], "30-59": [0, 1, 0], "60+": [0, 0, 1]}
-    encoded_vector.extend(age_mapping.get(user_inputs.get('age', ''), [0, 0, 0]))
-    # Add similar mappings for other inputs (e.g., smoker, income, etc.)
-    return encoded_vector
+def save_user_item_matrix(user_item_matrix, filepath="user_item_matrix.csv"):
+    """
+    Save the user-item matrix to a CSV file.
+    """
+    user_item_matrix.to_csv(filepath)
+    print(f"User-item matrix saved to {filepath}")
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Manage the user-item matrix.")
-    parser.add_argument(
-        "--mode",
-        type=str,
-        choices=["generate", "update"],
-        default="update",
-        help="Mode to run the script: 'generate' to create the matrix from scratch, 'update' to update it incrementally."
-    )
-    args = parser.parse_args()
-    manage_user_item_matrix(mode=args.mode)
+    # Rebuild the user-item matrix
+    user_item_matrix = rebuild_user_item_matrix()
+
+    # Validate the matrix
+    if validate_user_item_matrix(user_item_matrix):
+        # Save the matrix to a CSV file
+        save_user_item_matrix(user_item_matrix)
+    else:
+        print("User-item matrix validation failed. No file was saved.")
