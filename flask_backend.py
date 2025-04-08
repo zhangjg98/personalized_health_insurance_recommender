@@ -57,23 +57,38 @@ dynamic_thresholds = unified_thresholds("processed_user_item_matrix.csv", keys_f
 
 # Load the NeuralCollaborativeFiltering model and user-item matrix
 try:
-    # Load the user-item matrix to determine dimensions
-    USER_ITEM_MATRIX = pd.read_csv("user_item_matrix.csv", index_col=0)
-    num_users, num_items = USER_ITEM_MATRIX.shape
-
-    # Pass dimensions to load_ncf_model
-    NCF_MODEL = load_ncf_model(
-        model_path="ncf_model.pth",
-        num_users=num_users,
-        num_items=num_items,
-        latent_dim=50,
-        hidden_dim=128
-    )
-    print("NCF model and user-item matrix loaded successfully.")  # Debugging log
+    # Check if there are any interactions in the database
+    with app.app_context():
+        interaction_count = db.session.query(Interaction).count()
+        if interaction_count == 0:
+            print("No interactions found in the database. Skipping NCF model loading.")  # Debugging log
+            NCF_MODEL = None
+            USER_ITEM_MATRIX = None
+        else:
+            # Load the user-item matrix to determine dimensions
+            USER_ITEM_MATRIX = pd.read_csv("user_item_matrix.csv", index_col=0)
+            if USER_ITEM_MATRIX.empty or USER_ITEM_MATRIX.shape[0] == 1 and USER_ITEM_MATRIX.shape[1] == 1:
+                print("User-item matrix is not meaningful. Skipping NCF model loading.")  # Debugging log
+                NCF_MODEL = None
+                USER_ITEM_MATRIX = None
+            else:
+                num_users, num_items = USER_ITEM_MATRIX.shape
+                NCF_MODEL = load_ncf_model(
+                    model_path="ncf_model.pth",
+                    num_users=num_users,
+                    num_items=num_items,
+                    latent_dim=50,
+                    hidden_dim=128
+                )
+                print("NCF model and user-item matrix loaded successfully.")  # Debugging log
 except FileNotFoundError:
-    raise FileNotFoundError("The user_item_matrix.csv file was not found. Ensure it exists before starting the Flask app.")
+    print("The user_item_matrix.csv file was not found. Skipping NCF model loading.")  # Debugging log
+    NCF_MODEL = None
+    USER_ITEM_MATRIX = None
 except ValueError as e:
-    raise ValueError(f"Error loading NCF model: {e}")
+    print(f"Error loading NCF model: {e}. Skipping NCF model loading.")  # Debugging log
+    NCF_MODEL = None
+    USER_ITEM_MATRIX = None
 
 @app.route('/')
 def home():
@@ -152,16 +167,16 @@ def recommend():
             print(f"Error during recommend_plan execution: {e}")  # Debugging log
             return jsonify({"error": f"Error during recommend_plan execution: {e}"}), 500
 
-        # Add SHAP explanations for each recommendation
-        for rec in recommendations:
-            item_id = rec.get("item_id")
-            if item_id is not None:
-                shap_explanation = generate_user_friendly_shap_explanations(NCF_MODEL, USER_ITEM_MATRIX, user_id, item_id)
-                rec["shap_explanation"] = shap_explanation
-
         # Remove disclaimer from backend response
         recommendations = [
             rec for rec in recommendations if rec["priority"] != "disclaimer"
+        ]
+
+        # Remove fallback recommendations from being treated as content-based
+        recommendations = [
+            rec for rec in recommendations if rec["priority"] != "fallback"
+        ] + [
+            rec for rec in recommendations if rec["priority"] == "fallback"
         ]
 
         # Ensure state-level messages are only generated when a state is provided
@@ -300,14 +315,6 @@ def recommend():
                 rec["priority"] = str(rec["priority"])
                 rec["score"] = float(rec["score"]) if rec.get("score") is not None else 0.0
                 rec["similarity_score"] = float(rec["similarity_score"]) if rec.get("similarity_score") is not None else 0.0
-                if "shap_explanation" in rec and isinstance(rec["shap_explanation"], dict):
-                    rec["shap_explanation"] = {
-                        "top_features": [
-                            {"feature": str(entry[0]), "impact": float(entry[1])}
-                            for entry in rec["shap_explanation"].get("top_features", [])
-                        ],
-                        "explanation": str(rec["shap_explanation"].get("explanation", ""))
-                    }
             for record in ml_output_json:
                 for key, value in record.items():
                     if isinstance(value, (np.float32, np.float64)):
