@@ -4,7 +4,7 @@ from database import db, User, Item, Interaction, UserItemMatrix  # Import model
 from propositional_logic import recommend_plan
 from ml_model import predict_medicare_spending
 from thresholds import compute_dynamic_thresholds, unified_thresholds
-from neural_collaborative_filtering import load_ncf_model, predict_user_item_interactions
+from neural_collaborative_filtering import load_ncf_model, predict_user_item_interactions, evaluate_model_metrics
 import pandas as pd
 import numpy as np
 import hashlib
@@ -12,7 +12,6 @@ import json  # Ensure JSON encoding/decoding for user_inputs
 import multiprocessing
 import atexit
 import warnings
-from analyze_shap_values import generate_user_friendly_shap_explanations
 
 app = Flask(__name__)
 CORS(app)
@@ -436,6 +435,23 @@ def get_interactions():
         for i in interactions
     ]
     return jsonify(data)
+
+@app.route('/metrics', methods=['GET'])
+def get_metrics():
+    try:
+        if NCF_MODEL is None or USER_ITEM_MATRIX is None:
+            return jsonify({"error": "Model or user-item matrix not loaded."}), 500
+
+        # Calculate and log evaluation metrics
+        print("Calculating evaluation metrics for the NCF model...")  # Debugging log
+        metrics = evaluate_model_metrics(NCF_MODEL, USER_ITEM_MATRIX.values, k=5)
+        print(f"Evaluation Metrics: Precision@5={metrics['Precision@K']:.4f}, Recall@5={metrics['Recall@K']:.4f}, "
+              f"NDCG@5={metrics['NDCG@K']:.4f}, Hit Rate@5={metrics['Hit Rate']:.4f}")  # Debugging log
+
+        return jsonify(metrics)
+    except Exception as e:
+        print(f"Error calculating metrics: {e}")
+        return jsonify({"error": str(e)}), 500
 
 # Function to clean up multiprocessing resources
 def cleanup_resources():
