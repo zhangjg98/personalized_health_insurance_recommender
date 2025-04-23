@@ -7,31 +7,39 @@ import shap
 import numpy as np
 
 class NeuralCollaborativeFiltering(nn.Module):
-    def __init__(self, num_users, num_items, latent_dim, hidden_dim):
+    def __init__(self, num_users, num_items, latent_dim, hidden_dim, dropout_rate=0.3):
         super(NeuralCollaborativeFiltering, self).__init__()
         self.user_embedding = nn.Embedding(num_users, latent_dim)
         self.item_embedding = nn.Embedding(num_items, latent_dim)
         self.fc_layers = nn.Sequential(
             nn.Linear(latent_dim * 2, hidden_dim),
+            nn.BatchNorm1d(hidden_dim),  # Add batch normalization
             nn.ReLU(),
+            nn.Dropout(dropout_rate),  # Add dropout
             nn.Linear(hidden_dim, 1)
         )
+        self.sigmoid = nn.Sigmoid()  # Add sigmoid activation for binary classification
 
     def forward(self, user, item):
         user_emb = self.user_embedding(user)
         item_emb = self.item_embedding(item)
         x = torch.cat([user_emb, item_emb], dim=1)
-        return self.fc_layers(x).squeeze()
+        return self.sigmoid(self.fc_layers(x)).squeeze()  # Apply sigmoid activation
 
-def train_and_save_model(user_item_matrix, latent_dim=50, hidden_dim=128, epochs=20, lr=0.001, model_path="ncf_model.pth"):
+def train_and_save_model(user_item_matrix, latent_dim=50, hidden_dim=128, epochs=20, lr=0.001, dropout_rate=0.3, l2_reg=0.001, model_path="ncf_model.pth"):
     num_users, num_items = user_item_matrix.shape
-    model = NeuralCollaborativeFiltering(num_users, num_items, latent_dim, hidden_dim)
-    optimizer = optim.Adam(model.parameters(), lr=lr)
-    criterion = nn.MSELoss()
+    model = NeuralCollaborativeFiltering(num_users, num_items, latent_dim, hidden_dim, dropout_rate)
+    optimizer = optim.Adam(model.parameters(), lr=lr, weight_decay=l2_reg)  # Add L2 regularization
+    criterion = nn.BCELoss()
 
     user_item_tensor = torch.tensor(user_item_matrix, dtype=torch.float32)
     user_indices, item_indices = user_item_tensor.nonzero(as_tuple=True)
     ratings = user_item_tensor[user_indices, item_indices]
+
+    # Normalize ratings to the range [0, 1]
+    max_rating = ratings.max().item()
+    if max_rating > 1.0:
+        ratings = ratings / max_rating
 
     for epoch in range(epochs):
         model.train()
@@ -46,7 +54,7 @@ def train_and_save_model(user_item_matrix, latent_dim=50, hidden_dim=128, epochs
     print(f"Model saved to {model_path}")
     return model
 
-def load_ncf_model(model_path="ncf_model.pth", num_users=None, num_items=None, latent_dim=50, hidden_dim=128):
+def load_ncf_model(model_path="ncf_model.pth", num_users=None, num_items=None, latent_dim=50, hidden_dim=128, dropout_rate=0.3):
     """
     Load the Neural Collaborative Filtering model from a saved checkpoint.
     """
@@ -58,25 +66,17 @@ def load_ncf_model(model_path="ncf_model.pth", num_users=None, num_items=None, l
         num_users, num_items = 1, 7  # Placeholder dimensions
 
     # Initialize the model with the current dimensions
-    model = NeuralCollaborativeFiltering(num_users=num_users, num_items=num_items, latent_dim=latent_dim, hidden_dim=hidden_dim)
+    model = NeuralCollaborativeFiltering(num_users=num_users, num_items=num_items, latent_dim=latent_dim, hidden_dim=hidden_dim, dropout_rate=dropout_rate)
 
     try:
         # Attempt to load the saved model
         state_dict = torch.load(model_path)
-        if state_dict["user_embedding.weight"].shape[0] != num_users or state_dict["item_embedding.weight"].shape[0] != num_items:
-            raise RuntimeError(
-                f"Model dimensions do not match the current user-item matrix. "
-                f"Expected ({num_users}, {num_items}), but got "
-                f"({state_dict['user_embedding.weight'].shape[0]}, {state_dict['item_embedding.weight'].shape[0]})."
-            )
         model.load_state_dict(state_dict)
         print("Model loaded successfully.")  # Debugging log
     except RuntimeError as e:
         # Handle dimension mismatch errors
-        print(f"Model dimensions do not match the current user-item matrix. Retraining is required. Error: {e}")  # Debugging log
-        raise RuntimeError(
-            f"Model dimensions do not match the current user-item matrix. Retrain the model to fix this issue. Error: {e}"
-        )
+        print(f"Model dimensions do not match the current user-item matrix or architecture. Retraining is required. Error: {e}")  # Debugging log
+        raise RuntimeError("Model dimensions do not match. Retrain the model.")
 
     return model
 
