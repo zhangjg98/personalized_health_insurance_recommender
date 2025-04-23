@@ -1,7 +1,7 @@
 import os
 import pandas as pd
 from database import db, Interaction
-from neural_collaborative_filtering import train_and_save_model, evaluate_model, load_ncf_model
+from neural_collaborative_filtering import train_and_save_model, evaluate_model, load_ncf_model, evaluate_model_metrics
 from flask import Flask
 
 app = Flask(__name__)
@@ -71,5 +71,12 @@ else:
 try:
     mse, f1 = evaluate_model(NCF_MODEL, user_item_matrix)
     print(f"Model Evaluation - Mean Squared Error (MSE): {mse:.4f}, F1-score: {f1:.4f}")
+
+    # Calculate additional metrics
+    metrics = evaluate_model_metrics(NCF_MODEL, user_item_matrix, k=5)
+    print(f"Precision@5: {metrics['Precision@K']:.4f}")
+    print(f"Recall@5: {metrics['Recall@K']:.4f}")
+    print(f"NDCG@5: {metrics['NDCG@K']:.4f}")
+    print(f"Hit Rate@5: {metrics['Hit Rate']:.4f}")
 except ValueError as e:
     print(f"Error during model evaluation: {e}")
