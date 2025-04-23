@@ -255,3 +255,76 @@ def explain_ncf_predictions(model, user_item_matrix, user_id, item_index, top_n=
     except Exception as e:
         print(f"Error generating SHAP explanation for item_index {item_index}: {e}")  # Debugging log
         return {"top_features": [], "explanation": "Error occurred while generating SHAP explanation."}
+
+def precision_at_k(predictions, ground_truth, k):
+    """
+    Calculate Precision@K.
+    """
+    top_k_preds = np.argsort(predictions)[-k:][::-1]
+    relevant_items = set(np.where(ground_truth > 0)[0])
+    recommended_items = set(top_k_preds)
+    return len(recommended_items & relevant_items) / k
+
+def recall_at_k(predictions, ground_truth, k):
+    """
+    Calculate Recall@K.
+    """
+    top_k_preds = np.argsort(predictions)[-k:][::-1]
+    relevant_items = set(np.where(ground_truth > 0)[0])
+    recommended_items = set(top_k_preds)
+    return len(recommended_items & relevant_items) / len(relevant_items) if relevant_items else 0
+
+def ndcg_at_k(predictions, ground_truth, k):
+    """
+    Calculate NDCG@K.
+    """
+    top_k_preds = np.argsort(predictions)[-k:][::-1]
+    dcg = sum((ground_truth[i] / np.log2(idx + 2)) for idx, i in enumerate(top_k_preds))
+    ideal_dcg = sum((ground_truth[i] / np.log2(idx + 2)) for idx, i in enumerate(np.argsort(ground_truth)[-k:][::-1]))
+    return dcg / ideal_dcg if ideal_dcg > 0 else 0
+
+def hit_rate(predictions, ground_truth, k):
+    """
+    Calculate Hit Rate.
+    """
+    top_k_preds = np.argsort(predictions)[-k:][::-1]
+    relevant_items = set(np.where(ground_truth > 0)[0])
+    return 1 if relevant_items & set(top_k_preds) else 0
+
+def evaluate_model_metrics(model, user_item_matrix, k=5):
+    """
+    Evaluate the model using Precision@K, Recall@K, NDCG@K, and Hit Rate.
+
+    Parameters:
+        model (NeuralCollaborativeFiltering): Trained NCF model.
+        user_item_matrix (numpy.ndarray): User-item interaction matrix.
+        k (int): Number of top recommendations to consider.
+
+    Returns:
+        dict: Evaluation metrics.
+    """
+    num_users, num_items = user_item_matrix.shape
+    precision_scores, recall_scores, ndcg_scores, hit_rates = [], [], [], []
+
+    for user_id in range(num_users):
+        ground_truth = user_item_matrix[user_id]
+        if np.sum(ground_truth) == 0:
+            continue  # Skip users with no interactions
+
+        with torch.no_grad():
+            predictions = model(
+                torch.tensor([user_id] * num_items, dtype=torch.long),
+                torch.arange(num_items, dtype=torch.long)
+            ).numpy()
+
+        precision_scores.append(precision_at_k(predictions, ground_truth, k))
+        recall_scores.append(recall_at_k(predictions, ground_truth, k))
+        ndcg_scores.append(ndcg_at_k(predictions, ground_truth, k))
+        hit_rates.append(hit_rate(predictions, ground_truth, k))
+
+    return {
+        "Precision@K": np.mean(precision_scores),
+        "Recall@K": np.mean(recall_scores),
+        "NDCG@K": np.mean(ndcg_scores),
+        "Hit Rate": np.mean(hit_rates)
+    }
