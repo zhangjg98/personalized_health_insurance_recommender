@@ -14,7 +14,13 @@ function MetricsDashboard() {
         }
         const data = await response.json();
         setMetrics(data);
+
+        // Universal message about recommendation debugging
+        console.log(
+          "Note: Recommendations generated without a disclaimer about filtering techniques do not use the model being evaluated here."
+        );
       } catch (err) {
+        console.error("Error fetching metrics:", err);
         setError(err.message);
       }
     };
@@ -25,6 +31,9 @@ function MetricsDashboard() {
   return (
     <Container className="mt-4">
       <h2 className="mb-4 text-center">Model Evaluation Metrics</h2>
+      <p className="text-muted">
+        These metrics reflect the performance of the Neural Collaborative Filtering (NCF) model, which is based on user feedback data. Recommendations generated without a disclaimer about filtering techniques do not use this model.
+      </p>
       {error && <Alert variant="danger">{error}</Alert>}
       {metrics && (
         <Row>

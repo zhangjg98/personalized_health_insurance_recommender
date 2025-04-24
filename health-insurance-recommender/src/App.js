@@ -46,6 +46,7 @@ function App() {
 
     try {
       const payload = { ...formData, user_id: 1 }; // Use static user_id for now
+      localStorage.setItem("latestUserInput", JSON.stringify(payload)); // Save the latest user input to localStorage
       const response = await fetch("/recommend", {
         method: "POST",
         headers: {
