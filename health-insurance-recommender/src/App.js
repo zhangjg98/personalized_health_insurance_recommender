@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from "react";
 import { Container, Form, Button, Card, Row, Col, Alert } from "react-bootstrap";
 import ReactTooltip from "react-tooltip";
+import { BrowserRouter as Router, Routes, Route, Link } from "react-router-dom"; // Replace Switch with Routes
 import "bootstrap/dist/css/bootstrap.min.css";
+import MetricsDashboard from "./MetricsDashboard"; // Ensure MetricsDashboard is imported only once
 
 function App() {
   const [formData, setFormData] = useState({
@@ -200,438 +202,408 @@ const logSpecificPlanFeedback = async () => {
   }, [recommendations]);
 
   return (
-    <Container className="mt-4">
-      <h1 className="mb-4 text-center">Personalized Health Insurance Recommender</h1>
-      {error && <Alert variant="danger">{error}</Alert>}
-      <Form onSubmit={handleSubmit}>
-        <Row>
-          <Col md={4}>
-            <Form.Group controlId="formAge">
-              <Form.Label>Age Range:</Form.Label>
-              <Form.Control as="select" name="age" value={formData.age} onChange={handleChange} className="custom-dropdown">
-                <option value="young_adult">18-29</option>
-                <option value="adult">30-59</option>
-                <option value="senior">60+</option>
-              </Form.Control>
-            </Form.Group>
-          </Col>
-          <Col md={4}>
-            <Form.Group controlId="formSmoker">
-              <Form.Label>Are you a smoker?</Form.Label>
-              <Form.Control as="select" name="smoker" value={formData.smoker} onChange={handleChange} className="custom-dropdown">
-                <option value="no">No</option>
-                <option value="yes">Yes</option>
-              </Form.Control>
-            </Form.Group>
-          </Col>
-          <Col md={4}>
-            <Form.Group controlId="formState">
-              <Form.Label>State (optional):</Form.Label>
-              <Form.Control as="select" name="state" value={formData.state} onChange={handleChange} className="custom-dropdown">
-                <option value="">Prefer not to say</option>
-                <option value="AL">Alabama</option>
-                <option value="AK">Alaska</option>
-                <option value="AZ">Arizona</option>
-                <option value="AR">Arkansas</option>
-                <option value="CA">California</option>
-                <option value="CO">Colorado</option>
-                <option value="CT">Connecticut</option>
-                <option value="DE">Delaware</option>
-                <option value="DC">District of Columbia</option>
-                <option value="FL">Florida</option>
-                <option value="GA">Georgia</option>
-                <option value="HI">Hawaii</option>
-                <option value="ID">Idaho</option>
-                <option value="IL">Illinois</option>
-                <option value="IN">Indiana</option>
-                <option value="IA">Iowa</option>
-                <option value="KS">Kansas</option>
-                <option value="KY">Kentucky</option>
-                <option value="LA">Louisiana</option>
-                <option value="ME">Maine</option>
-                <option value="MD">Maryland</option>
-                <option value="MA">Massachusetts</option>
-                <option value="MI">Michigan</option>
-                <option value="MN">Minnesota</option>
-                <option value="MS">Mississippi</option>
-                <option value="MO">Missouri</option>
-                <option value="MT">Montana</option>
-                <option value="NE">Nebraska</option>
-                <option value="NV">Nevada</option>
-                <option value="NH">New Hampshire</option>
-                <option value="NJ">New Jersey</option>
-                <option value="NM">New Mexico</option>
-                <option value="NY">New York</option>
-                <option value="NC">North Carolina</option>
-                <option value="ND">North Dakota</option>
-                <option value="OH">Ohio</option>
-                <option value="OK">Oklahoma</option>
-                <option value="OR">Oregon</option>
-                <option value="PA">Pennsylvania</option>
-                <option value="RI">Rhode Island</option>
-                <option value="SC">South Carolina</option>
-                <option value="SD">South Dakota</option>
-                <option value="TN">Tennessee</option>
-                <option value="TX">Texas</option>
-                <option value="UT">Utah</option>
-                <option value="VT">Vermont</option>
-                <option value="VA">Virginia</option>
-                <option value="WA">Washington</option>
-                <option value="WV">West Virginia</option>
-                <option value="WI">Wisconsin</option>
-                <option value="WY">Wyoming</option>
-                <option value="Territory">U.S. Territories</option>
-              </Form.Control>
-            </Form.Group>
-          </Col>
-        </Row>
-        <Row>
-          <Col md={4}>
-            <Form.Group controlId="formBmi">
-              <Form.Label>BMI Range (optional):</Form.Label>
-              <Form.Control as="select" name="bmi" value={formData.bmi} onChange={handleChange} className="custom-dropdown">
-                <option value="">Prefer not to say</option>
-                <option value="underweight">(&lt;18.5)</option>
-                <option value="normal">(18.5–24.9)</option>
-                <option value="overweight">(25.0–29.9)</option>
-                <option value="obese">(30+)</option>
-              </Form.Control>
-            </Form.Group>
-          </Col>
-          <Col md={4}>
-            <Form.Group controlId="formIncome">
-              <Form.Label>Annual Income (optional):</Form.Label>
-              <Form.Control as="select" name="income" value={formData.income} onChange={handleChange} className="custom-dropdown">
-                <option value="">Prefer not to say</option>
-                <option value="below_30000">Below $30,000</option>
-                <option value="30000_to_74999">$30,000–$74,999</option>
-                <option value="75000_to_99999">$75,000–$99,999</option>
-                <option value="above_100000">Above $100,000</option>
-              </Form.Control>
-            </Form.Group>
-          </Col>
-          <Col md={4}>
-            <Form.Group controlId="formFamilySize">
-              <Form.Label>Family Size (optional):</Form.Label>
-              <Form.Control as="select" name="family_size" value={formData.family_size} onChange={handleChange} className="custom-dropdown">
-                <option value="">Prefer not to say</option>
-                <option value="1">1 person</option>
-                <option value="2_to_3">2–3 people</option>
-                <option value="4_plus">4+ people</option>
-              </Form.Control>
-            </Form.Group>
-          </Col>
-        </Row>
-        <Row>
-          <Col md={4}>
-            <Form.Group controlId="formChronicCondition">
-              <Form.Label>Chronic Condition?</Form.Label>
-              <Form.Control as="select" name="chronic_condition" value={formData.chronic_condition} onChange={handleChange} className="custom-dropdown">
-                <option value="no">No</option>
-                <option value="yes">Yes</option>
-              </Form.Control>
-            </Form.Group>
-          </Col>
-          <Col md={4}>
-            <Form.Group controlId="formMedicalCareFrequency">
-              <Form.Label>How often do you need medical visits?</Form.Label>
-              <Form.Control as="select" name="medical_care_frequency" value={formData.medical_care_frequency} onChange={handleChange} className="custom-dropdown">
-                <option value="Low">Rarely</option>
-                <option value="Moderate">Sometimes</option>
-                <option value="High">Often</option>
-              </Form.Control>
-            </Form.Group>
-          </Col>
-          <Col md={4}>
-            <Form.Group controlId="formPreferredPlanType">
-              <Form.Label>Preferred Plan Type (optional):</Form.Label>
-              <Form.Control
-                as="select"
-                name="preferred_plan_type"
-                value={formData.preferred_plan_type}
-                onChange={handleChange}
-                className="custom-dropdown"
-              >
-                <option value="">Select a plan type</option>
-                <option value="HMO">HMO</option>
-                <option value="PPO">PPO</option>
-                <option value="EPO">EPO</option>
-                <option value="POS">POS</option>
-              </Form.Control>
-            </Form.Group>
-          </Col>
-        </Row>
-        <Row>
-          <Col md={4}>
-            <Form.Group controlId="formPriority">
-              <Form.Label>What is most important to you in a plan? (optional):</Form.Label>
-              <Form.Control
-                as="select"
-                name="priority"
-                value={formData.priority}
-                onChange={handleChange}
-                className="custom-dropdown"
-              >
-                <option value="">Select a priority</option>
-                <option value="Low Premiums">Low Premiums</option>
-                <option value="Comprehensive Coverage">Comprehensive Coverage</option>
-                <option value="Preventive Care">Preventive Care</option>
-                <option value="Low Deductibles">Low Deductibles</option>
-              </Form.Control>
-            </Form.Group>
-          </Col>
-          <Col md={4}>
-            <Form.Group controlId="formGender">
-              <Form.Label>Gender (optional):</Form.Label>
-              <Form.Control
-                as="select"
-                name="gender"
-                value={formData.gender}
-                onChange={handleChange}
-                className="custom-dropdown"
-              >
-                <option value="">Prefer not to say</option>
-                <option value="female">Female</option>
-                <option value="male">Male</option>
-                <option value="other">Other</option>
-              </Form.Control>
-            </Form.Group>
-          </Col>
-          <Col md={4}>
-            <Form.Group controlId="formEthnicity">
-              <Form.Label>Ethnicity (optional):</Form.Label>
-              <Form.Control
-                as="select"
-                name="ethnicity"
-                value={formData.ethnicity}
-                onChange={handleChange}
-                className="custom-dropdown"
-              >
-                <option value="">Prefer not to say</option>
-                <option value="white">Non-Hispanic White</option>
-                <option value="black">African American</option>
-                <option value="hispanic">Hispanic</option>
-                <option value="other">Other</option>
-              </Form.Control>
-            </Form.Group>
-          </Col>
-        </Row>
-        <Button variant="primary" type="submit" className="mt-3">
-          Get Recommendation
-        </Button>
-      </Form>
+    <Router>
+      <Container className="mt-4">
+        <h1 className="mb-4 text-center">Personalized Health Insurance Recommender</h1>
+        <Routes> {/* Replace Switch with Routes */}
+          {/* Main App Route */}
+          <Route path="/" element={
+            <>
+              {error && <Alert variant="danger">{error}</Alert>}
+              <Form onSubmit={handleSubmit}>
+                <Row>
+                  <Col md={4}>
+                    <Form.Group controlId="formAge">
+                      <Form.Label>Age Range:</Form.Label>
+                      <Form.Control as="select" name="age" value={formData.age} onChange={handleChange} className="custom-dropdown">
+                        <option value="young_adult">18-29</option>
+                        <option value="adult">30-59</option>
+                        <option value="senior">60+</option>
+                      </Form.Control>
+                    </Form.Group>
+                  </Col>
+                  <Col md={4}>
+                    <Form.Group controlId="formSmoker">
+                      <Form.Label>Are you a smoker?</Form.Label>
+                      <Form.Control as="select" name="smoker" value={formData.smoker} onChange={handleChange} className="custom-dropdown">
+                        <option value="no">No</option>
+                        <option value="yes">Yes</option>
+                      </Form.Control>
+                    </Form.Group>
+                  </Col>
+                  <Col md={4}>
+                    <Form.Group controlId="formState">
+                      <Form.Label>State (optional):</Form.Label>
+                      <Form.Control as="select" name="state" value={formData.state} onChange={handleChange} className="custom-dropdown">
+                        <option value="">Prefer not to say</option>
+                        <option value="AL">Alabama</option>
+                        <option value="AK">Alaska</option>
+                        <option value="AZ">Arizona</option>
+                        <option value="AR">Arkansas</option>
+                        <option value="CA">California</option>
+                        <option value="CO">Colorado</option>
+                        <option value="CT">Connecticut</option>
+                        <option value="DE">Delaware</option>
+                        <option value="DC">District of Columbia</option>
+                        <option value="FL">Florida</option>
+                        <option value="GA">Georgia</option>
+                        <option value="HI">Hawaii</option>
+                        <option value="ID">Idaho</option>
+                        <option value="IL">Illinois</option>
+                        <option value="IN">Indiana</option>
+                        <option value="IA">Iowa</option>
+                        <option value="KS">Kansas</option>
+                        <option value="KY">Kentucky</option>
+                        <option value="LA">Louisiana</option>
+                        <option value="ME">Maine</option>
+                        <option value="MD">Maryland</option>
+                        <option value="MA">Massachusetts</option>
+                        <option value="MI">Michigan</option>
+                        <option value="MN">Minnesota</option>
+                        <option value="MS">Mississippi</option>
+                        <option value="MO">Missouri</option>
+                        <option value="MT">Montana</option>
+                        <option value="NE">Nebraska</option>
+                        <option value="NV">Nevada</option>
+                        <option value="NH">New Hampshire</option>
+                        <option value="NJ">New Jersey</option>
+                        <option value="NM">New Mexico</option>
+                        <option value="NY">New York</option>
+                        <option value="NC">North Carolina</option>
+                        <option value="ND">North Dakota</option>
+                        <option value="OH">Ohio</option>
+                        <option value="OK">Oklahoma</option>
+                        <option value="OR">Oregon</option>
+                        <option value="PA">Pennsylvania</option>
+                        <option value="RI">Rhode Island</option>
+                        <option value="SC">South Carolina</option>
+                        <option value="SD">South Dakota</option>
+                        <option value="TN">Tennessee</option>
+                        <option value="TX">Texas</option>
+                        <option value="UT">Utah</option>
+                        <option value="VT">Vermont</option>
+                        <option value="VA">Virginia</option>
+                        <option value="WA">Washington</option>
+                        <option value="WV">West Virginia</option>
+                        <option value="WI">Wisconsin</option>
+                        <option value="WY">Wyoming</option>
+                        <option value="Territory">U.S. Territories</option>
+                      </Form.Control>
+                    </Form.Group>
+                  </Col>
+                </Row>
+                <Row>
+                  <Col md={4}>
+                    <Form.Group controlId="formBmi">
+                      <Form.Label>BMI Range (optional):</Form.Label>
+                      <Form.Control as="select" name="bmi" value={formData.bmi} onChange={handleChange} className="custom-dropdown">
+                        <option value="">Prefer not to say</option>
+                        <option value="underweight">(&lt;18.5)</option>
+                        <option value="normal">(18.5–24.9)</option>
+                        <option value="overweight">(25.0–29.9)</option>
+                        <option value="obese">(30+)</option>
+                      </Form.Control>
+                    </Form.Group>
+                  </Col>
+                  <Col md={4}>
+                    <Form.Group controlId="formIncome">
+                      <Form.Label>Annual Income (optional):</Form.Label>
+                      <Form.Control as="select" name="income" value={formData.income} onChange={handleChange} className="custom-dropdown">
+                        <option value="">Prefer not to say</option>
+                        <option value="below_30000">Below $30,000</option>
+                        <option value="30000_to_74999">$30,000–$74,999</option>
+                        <option value="75000_to_99999">$75,000–$99,999</option>
+                        <option value="above_100000">Above $100,000</option>
+                      </Form.Control>
+                    </Form.Group>
+                  </Col>
+                  <Col md={4}>
+                    <Form.Group controlId="formFamilySize">
+                      <Form.Label>Family Size (optional):</Form.Label>
+                      <Form.Control as="select" name="family_size" value={formData.family_size} onChange={handleChange} className="custom-dropdown">
+                        <option value="">Prefer not to say</option>
+                        <option value="1">1 person</option>
+                        <option value="2_to_3">2–3 people</option>
+                        <option value="4_plus">4+ people</option>
+                      </Form.Control>
+                    </Form.Group>
+                  </Col>
+                </Row>
+                <Row>
+                  <Col md={4}>
+                    <Form.Group controlId="formChronicCondition">
+                      <Form.Label>Chronic Condition?</Form.Label>
+                      <Form.Control as="select" name="chronic_condition" value={formData.chronic_condition} onChange={handleChange} className="custom-dropdown">
+                        <option value="no">No</option>
+                        <option value="yes">Yes</option>
+                      </Form.Control>
+                    </Form.Group>
+                  </Col>
+                  <Col md={4}>
+                    <Form.Group controlId="formMedicalCareFrequency">
+                      <Form.Label>How often do you need medical visits?</Form.Label>
+                      <Form.Control as="select" name="medical_care_frequency" value={formData.medical_care_frequency} onChange={handleChange} className="custom-dropdown">
+                        <option value="Low">Rarely</option>
+                        <option value="Moderate">Sometimes</option>
+                        <option value="High">Often</option>
+                      </Form.Control>
+                    </Form.Group>
+                  </Col>
+                  <Col md={4}>
+                    <Form.Group controlId="formPreferredPlanType">
+                      <Form.Label>Preferred Plan Type (optional):</Form.Label>
+                      <Form.Control
+                        as="select"
+                        name="preferred_plan_type"
+                        value={formData.preferred_plan_type}
+                        onChange={handleChange}
+                        className="custom-dropdown"
+                      >
+                        <option value="">Select a plan type</option>
+                        <option value="HMO">HMO</option>
+                        <option value="PPO">PPO</option>
+                        <option value="EPO">EPO</option>
+                        <option value="POS">POS</option>
+                      </Form.Control>
+                    </Form.Group>
+                  </Col>
+                </Row>
+                <Row>
+                  <Col md={4}>
+                    <Form.Group controlId="formPriority">
+                      <Form.Label>What is most important to you in a plan? (optional):</Form.Label>
+                      <Form.Control
+                        as="select"
+                        name="priority"
+                        value={formData.priority}
+                        onChange={handleChange}
+                        className="custom-dropdown"
+                      >
+                        <option value="">Select a priority</option>
+                        <option value="Low Premiums">Low Premiums</option>
+                        <option value="Comprehensive Coverage">Comprehensive Coverage</option>
+                        <option value="Preventive Care">Preventive Care</option>
+                        <option value="Low Deductibles">Low Deductibles</option>
+                      </Form.Control>
+                    </Form.Group>
+                  </Col>
+                  <Col md={4}>
+                    <Form.Group controlId="formGender">
+                      <Form.Label>Gender (optional):</Form.Label>
+                      <Form.Control
+                        as="select"
+                        name="gender"
+                        value={formData.gender}
+                        onChange={handleChange}
+                        className="custom-dropdown"
+                      >
+                        <option value="">Prefer not to say</option>
+                        <option value="female">Female</option>
+                        <option value="male">Male</option>
+                        <option value="other">Other</option>
+                      </Form.Control>
+                    </Form.Group>
+                  </Col>
+                  <Col md={4}>
+                    <Form.Group controlId="formEthnicity">
+                      <Form.Label>Ethnicity (optional):</Form.Label>
+                      <Form.Control
+                        as="select"
+                        name="ethnicity"
+                        value={formData.ethnicity}
+                        onChange={handleChange}
+                        className="custom-dropdown"
+                      >
+                        <option value="">Prefer not to say</option>
+                        <option value="white">Non-Hispanic White</option>
+                        <option value="black">African American</option>
+                        <option value="hispanic">Hispanic</option>
+                        <option value="other">Other</option>
+                      </Form.Control>
+                    </Form.Group>
+                  </Col>
+                </Row>
+                <Button variant="primary" type="submit" className="mt-3">
+                  Get Recommendation
+                </Button>
+              </Form>
 
-      {/* Disclaimer for ethnicity and gender inputs */}
-      <Alert variant="info" className="mt-4">
-        <strong>Note:</strong> Providing your state input will make ethnicity and gender-based recommendations more insightful. Without the state input, these recommendations may lack context.
-      </Alert>
+              {/* Disclaimer for ethnicity and gender inputs */}
+              <Alert variant="info" className="mt-4">
+                <strong>Note:</strong> Providing your state input will make ethnicity and gender-based recommendations more insightful. Without the state input, these recommendations may lack context.
+              </Alert>
 
-      {recommendations.length > 0 && (
-        <Card className="mt-4">
-          <Card.Header>Recommended Plans</Card.Header>
-          <Card.Body>
-            {recommendations.map((rec, index) => (
-              <div key={index} className="mb-3">
-                {rec.priority === "insufficient_criteria" || rec.priority === "warning" ? (
-                  <Alert variant="warning">
-                    {rec.justification}
-                  </Alert>
-                ) : (
-                  <>
-                    <Card.Text>
-                      <strong>{rec.priority === "strongly recommended" ? "Strongly Recommended:" : "Recommended:"}</strong> {rec.plan}
-                    </Card.Text>
-                    <Card.Text><em>{rec.justification}</em></Card.Text>
-                    {rec.disclaimer_note && (
-                      <Alert variant="info">
-                        <strong>Disclaimer:</strong> {rec.disclaimer_note}
-                      </Alert>
+              {recommendations.length > 0 && (
+                <Card className="mt-4">
+                  <Card.Header>Recommended Plans</Card.Header>
+                  <Card.Body>
+                    {recommendations.map((rec, index) => (
+                      <div key={index} className="mb-3">
+                        {rec.priority === "insufficient_criteria" || rec.priority === "warning" ? (
+                          <Alert variant="warning">
+                            {rec.justification}
+                          </Alert>
+                        ) : (
+                          <>
+                            <Card.Text>
+                              <strong>{rec.priority === "strongly recommended" ? "Strongly Recommended:" : "Recommended:"}</strong> {rec.plan}
+                            </Card.Text>
+                            <Card.Text><em>{rec.justification}</em></Card.Text>
+                            {rec.disclaimer_note && (
+                              <Alert variant="info">
+                                <strong>Disclaimer:</strong> {rec.disclaimer_note}
+                              </Alert>
+                            )}
+                            {formData.preferred_plan_type && rec.plan.includes(formData.preferred_plan_type) && (
+                              <Alert variant="info">
+                                This recommendation matches your preferred plan type: {formData.preferred_plan_type}.
+                              </Alert>
+                            )}
+                          </>
+                        )}
+                      </div>
+                    ))}
+
+                    {/* Feedback Section */}
+                    {recommendations.some((rec) => rec.priority !== "insufficient_criteria" && rec.priority !== "warning") && (
+                      <div className="mt-3">
+                        <h5>Was this recommendation helpful?</h5>
+                        <Button
+                          variant={selectedFeedback === "Yes" ? "success" : "outline-success"}
+                          size="sm"
+                          className={`me-2 ${selectedFeedback === "Yes" ? "selected-feedback" : ""}`}
+                          onClick={() => logPlanFeedback(5)} // Positive feedback
+                          disabled={feedbackGiven} // Disable button if feedback is already given
+                        >
+                          Yes
+                        </Button>
+                        <Button
+                          variant={selectedFeedback === "No" ? "danger" : "outline-danger"}
+                          size="sm"
+                          className={selectedFeedback === "No" ? "selected-feedback" : ""}
+                          onClick={() => logPlanFeedback(1)} // Negative feedback
+                          disabled={feedbackGiven} // Disable button if feedback is already given
+                        >
+                          No
+                        </Button>
+                      </div>
                     )}
-                    {formData.preferred_plan_type && rec.plan.includes(formData.preferred_plan_type) && (
-                      <Alert variant="info">
-                        This recommendation matches your preferred plan type: {formData.preferred_plan_type}.
-                      </Alert>
+
+                    {/* Dropdown for selecting the most useful recommendation */}
+                    {selectedFeedback === "Yes" &&
+                      recommendations.length > 1 && (
+                      <div className="mt-3">
+                        <h5>Which recommendation was most useful to you?</h5>
+                        <Form.Select
+                          value={selectedRecommendation}
+                          onChange={(e) => setSelectedRecommendation(e.target.value)}
+                          disabled={specificFeedbackGiven}
+                          className="custom-dropdown"
+                        >
+                          <option value="">Select a recommendation</option>
+                          {recommendations.map((rec, index) => (
+                            <option key={index} value={rec.item_id}>
+                              {rec.plan}
+                            </option>
+                          ))}
+                        </Form.Select>
+                        <Button
+                          variant="primary"
+                          className="mt-3"
+                          onClick={logSpecificPlanFeedback} // Log feedback for the selected recommendation
+                          disabled={!selectedRecommendation || specificFeedbackGiven} // Disable after submission
+                        >
+                          Submit Feedback
+                        </Button>
+                      </div>
                     )}
-                  </>
-                )}
-              </div>
-            ))}
+                  </Card.Body>
+                </Card>
+              )}
 
-            {/* Feedback Section */}
-            {recommendations.some((rec) => rec.priority !== "insufficient_criteria" && rec.priority !== "warning") && (
-              <div className="mt-3">
-                <h5>Was this recommendation helpful?</h5>
-                <Button
-                  variant={selectedFeedback === "Yes" ? "success" : "outline-success"}
-                  size="sm"
-                  className={`me-2 ${selectedFeedback === "Yes" ? "selected-feedback" : ""}`}
-                  onClick={() => logPlanFeedback(5)} // Positive feedback
-                  disabled={feedbackGiven} // Disable button if feedback is already given
-                >
-                  Yes
-                </Button>
-                <Button
-                  variant={selectedFeedback === "No" ? "danger" : "outline-danger"}
-                  size="sm"
-                  className={selectedFeedback === "No" ? "selected-feedback" : ""}
-                  onClick={() => logPlanFeedback(1)} // Negative feedback
-                  disabled={feedbackGiven} // Disable button if feedback is already given
-                >
-                  No
-                </Button>
-              </div>
-            )}
+              {mlSummary && (
+                <Card className="mt-4">
+                  <Card.Header>State-Level Medicare Trends</Card.Header>
+                  <Card.Body>
+                    <Card.Text>{mlSummary}</Card.Text>
+                  </Card.Body>
+                </Card>
+              )}
 
-            {/* Dropdown for selecting the most useful recommendation */}
-            {selectedFeedback === "Yes" &&
-              recommendations.length > 1 && (
-              <div className="mt-3">
-                <h5>Which recommendation was most useful to you?</h5>
-                <Form.Select
-                  value={selectedRecommendation}
-                  onChange={(e) => setSelectedRecommendation(e.target.value)}
-                  disabled={specificFeedbackGiven}
-                  className="custom-dropdown"
-                >
-                  <option value="">Select a recommendation</option>
-                  {recommendations.map((rec, index) => (
-                    <option key={index} value={rec.item_id}>
-                      {rec.plan}
-                    </option>
-                  ))}
-                </Form.Select>
-                <Button
-                  variant="primary"
-                  className="mt-3"
-                  onClick={logSpecificPlanFeedback} // Log feedback for the selected recommendation
-                  disabled={!selectedRecommendation || specificFeedbackGiven} // Disable after submission
-                >
-                  Submit Feedback
-                </Button>
-              </div>
-            )}
-          </Card.Body>
-        </Card>
-      )}
+              {mlData && mlData.length > 0 && (
+                <Card className="mt-4">
+                  <Card.Header>Predicted Medicare Spending Details</Card.Header>
+                  <Card.Body>
+                    <ul>
+                      {metricsInfo.map((item) => {
+                        const metricValue = mlData[0][item.key];
+                        const classification = mlData[0][item.classificationKey];
+                        const comparison = mlData[0][item.comparisonKey]; // Updated comparison text
+                        const description = classificationDescriptions[classification] || "No description available.";
+                        const color = classificationColors[classification] || "black";
 
-      {mlSummary && (
-        <Card className="mt-4">
-          <Card.Header>State-Level Medicare Trends</Card.Header>
-          <Card.Body>
-            <Card.Text>{mlSummary}</Card.Text>
-          </Card.Body>
-        </Card>
-      )}
+                        return (
+                          <li key={item.key}>
+                            <span
+                              style={{
+                                textDecoration: "underline dotted",
+                                cursor: "help",
+                              }}
+                              data-tip={item.tooltip}
+                              onMouseEnter={() => showTooltip(true)} // Show tooltip on hover
+                              onMouseLeave={() => {
+                                showTooltip(false); // Hide tooltip temporarily
+                                setTimeout(() => showTooltip(true), 50); // Re-enable tooltip after a short delay
+                              }}
+                            >
+                              <strong>{item.key}:</strong>
+                            </span>{" "}
+                            <span style={{ color }}>{metricValue !== undefined ? metricValue.toFixed(4) : "N/A"}</span>{" "}
+                            <em>({classification || "Unknown"})</em> - {description}{" "}
+                            <span>{comparison}</span> {/* Display comparison as a separate sentence */}
+                          </li>
+                        );
+                      })}
+                    </ul>
+                    {tooltip && <ReactTooltip effect="solid" />} {/* Tooltip component */}
+                    <p className="mt-3 text-muted">
+                      <strong>Note:</strong> The values shown in "Predicted Medicare Spending Details" are predictions based on historical data and trained machine learning models. These predictions aim to provide insights into state-level trends and are not exact measurements.
+                    </p>
+                    <p className="mt-3 text-muted">
+                      <strong>Additional Note:</strong> The classification (e.g., "Moderate") is based on thresholds derived from state-level data, specifically the 10th to 90th percentiles. Values within this range are classified as "Moderate". The comparison (e.g., "above the national average") is relative to the national average, calculated as the mean of all state values.
+                    </p>
+                  </Card.Body>
+                </Card>
+              )}
 
-      {mlData && mlData.length > 0 && (
-        <Card className="mt-4">
-          <Card.Header>Predicted Medicare Spending Details</Card.Header>
-          <Card.Body>
-            <ul>
-              {metricsInfo.map((item) => {
-                const metricValue = mlData[0][item.key];
-                const classification = mlData[0][item.classificationKey];
-                const comparison = mlData[0][item.comparisonKey]; // Updated comparison text
-                const description = classificationDescriptions[classification] || "No description available.";
-                const color = classificationColors[classification] || "black";
+              {outlierMessage && (
+                <Card className="mt-4">
+                  <Card.Header>Outlier Information</Card.Header>
+                  <Card.Body>
+                    <Card.Text>{outlierMessage}</Card.Text>
+                  </Card.Body>
+                </Card>
+              )}
 
-                return (
-                  <li key={item.key}>
-                    <span
-                      style={{
-                        textDecoration: "underline dotted",
-                        cursor: "help",
-                      }}
-                      data-tip={item.tooltip}
-                      onMouseEnter={() => showTooltip(true)} // Show tooltip on hover
-                      onMouseLeave={() => {
-                        showTooltip(false); // Hide tooltip temporarily
-                        setTimeout(() => showTooltip(true), 50); // Re-enable tooltip after a short delay
-                      }}
-                    >
-                      <strong>{item.key}:</strong>
-                    </span>{" "}
-                    <span style={{ color }}>{metricValue !== undefined ? metricValue.toFixed(4) : "N/A"}</span>{" "}
-                    <em>({classification || "Unknown"})</em> - {description}{" "}
-                    <span>{comparison}</span> {/* Display comparison as a separate sentence */}
-                  </li>
-                );
-              })}
-            </ul>
-            {tooltip && <ReactTooltip effect="solid" />} {/* Tooltip component */}
-            <p className="mt-3 text-muted">
-              <strong>Note:</strong> The values shown in "Predicted Medicare Spending Details" are predictions based on historical data and trained machine learning models. These predictions aim to provide insights into state-level trends and are not exact measurements.
-            </p>
-            <p className="mt-3 text-muted">
-              <strong>Additional Note:</strong> The classification (e.g., "Moderate") is based on thresholds derived from state-level data, specifically the 10th to 90th percentiles. Values within this range are classified as "Moderate". The comparison (e.g., "above the national average") is relative to the national average, calculated as the mean of all state values.
-            </p>
-          </Card.Body>
-        </Card>
-      )}
+              {disclaimer && (
+                <Alert variant="info" className="mt-4">
+                  <strong>Disclaimer:</strong> {disclaimer}
+                </Alert>
+              )}
+            </>
+          } />
 
-      {outlierMessage && (
-        <Card className="mt-4">
-          <Card.Header>Outlier Information</Card.Header>
-          <Card.Body>
-            <Card.Text>{outlierMessage}</Card.Text>
-          </Card.Body>
-        </Card>
-      )}
+          {/* Metrics Dashboard Route */}
+          <Route path="/metrics" element={<MetricsDashboard />} />
+        </Routes>
 
-      {disclaimer && (
-        <Alert variant="info" className="mt-4">
-          <strong>Disclaimer:</strong> {disclaimer}
-        </Alert>
-      )}
-    </Container>
+        {/* Footer with link to Metrics Dashboard */}
+        <footer className="mt-4 text-center">
+          <Link to="/metrics">View Model Performance</Link>
+        </footer>
+      </Container>
+    </Router>
   );
 }
 
-function MetricsDashboard() {
-  const [metrics, setMetrics] = useState(null);
-  const [error, setError] = useState("");
-
-  useEffect(() => {
-    const fetchMetrics = async () => {
-      try {
-        const response = await fetch("/metrics");
-        if (!response.ok) {
-          throw new Error(`Server error: ${response.status}`);
-        }
-        const data = await response.json();
-        setMetrics(data);
-      } catch (err) {
-        setError(err.message);
-      }
-    };
-
-    fetchMetrics();
-  }, []);
-
-  return (
-    <Container className="mt-4">
-      <h2 className="mb-4 text-center">Model Evaluation Metrics</h2>
-      {error && <p className="text-danger">{error}</p>}
-      {metrics && (
-        <Row>
-          {Object.entries(metrics).map(([key, value]) => (
-            <Col md={3} key={key}>
-              <Card className="mb-4">
-                <Card.Body>
-                  <Card.Title>{key}</Card.Title>
-                  <Card.Text>{value.toFixed(4)}</Card.Text>
-                </Card.Body>
-              </Card>
-            </Col>
-          ))}
-        </Row>
-      )}
-    </Container>
-  );
-}
-
-// Export both components as named exports
-export { App, MetricsDashboard };
-
-// Reintroduce default export for App
 export default App;
