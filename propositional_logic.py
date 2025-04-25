@@ -3,8 +3,8 @@ import os
 import numpy as np  # Import numpy for array operations
 from database import db, Item, Interaction  # Import from database.py
 from thresholds import unified_thresholds  # Import dynamic thresholds
-from ml_model import predict_medicare_spending, content_based_filtering  # Use trained data for thresholds
-from neural_collaborative_filtering import predict_user_item_interactions, load_ncf_model, explain_ncf_predictions
+from ml_model import content_based_filtering  # Use trained data for thresholds
+from neural_collaborative_filtering import predict_user_item_interactions, load_ncf_model
 from plans import PLANS  # Import plans from plans dictionary
 from neural_collaborative_filtering import evaluate_model_metrics  # Import evaluation metrics function
 
@@ -738,5 +738,10 @@ def recommend_plan(user_input, priority="", ml_prediction_df=None):
 
     # Debugging log: Check recommendations before returning
     print("Final recommendations before returning:", final_recommendations)
+
+    # Debugging log: Check the priorities of all recommendations
+    print("Generated recommendations and their priorities:")
+    for rec in recommendations:
+        print(f"Plan: {rec.get('plan')}, Priority: {rec.get('priority')}")
 
     return final_recommendations
