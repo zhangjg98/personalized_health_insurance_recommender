@@ -1,8 +1,10 @@
 import os
 import pandas as pd
 from database import db, Interaction
-from neural_collaborative_filtering import train_and_save_model, evaluate_model, load_ncf_model, evaluate_model_metrics
+from neural_collaborative_filtering import train_and_save_model, load_ncf_model
+from evaluation_metrics import evaluate_model_metrics # Import from evaluation_metrics.py
 from flask import Flask
+from plans import PLANS
 
 app = Flask(__name__)
 app.config['SQLALCHEMY_DATABASE_URI'] = 'postgresql://recommender_user:securepassword@localhost/health_insurance_recommender'
@@ -69,14 +71,28 @@ else:
         )
 
 try:
-    mse, f1 = evaluate_model(NCF_MODEL, user_item_matrix)
-    print(f"Model Evaluation - Mean Squared Error (MSE): {mse:.4f}, F1-score: {f1:.4f}")
-
-    # Calculate additional metrics
-    metrics = evaluate_model_metrics(NCF_MODEL, user_item_matrix, k=5)
-    print(f"Precision@5: {metrics['Precision@K']:.4f}")
-    print(f"Recall@5: {metrics['Recall@K']:.4f}")
-    print(f"NDCG@5: {metrics['NDCG@K']:.4f}")
-    print(f"Hit Rate@5: {metrics['Hit Rate']:.4f}")
+    # Dummy user input for evaluation
+    user_input = {
+        "age": "adult",
+        "smoker": "no",
+        "bmi": "",
+        "income": "",
+        "family_size": "",
+        "chronic_condition": "no",
+        "medical_care_frequency": "Low",
+        "preferred_plan_type": "",
+        "priority": "",
+        "gender": "",
+        "ethnicity": ""
+    }
+    # Calculate metrics
+    k_percentage = 0.5  # Adjust k value as a percentage of the number of items
+    num_items = user_item_matrix.shape[1]
+    k_value = int(num_items * k_percentage)
+    metrics = evaluate_model_metrics(NCF_MODEL, user_item_matrix, k=k_value, user_inputs=user_input, plans=PLANS)
+    print(f"Precision@{k_value}: {metrics['Precision@K']:.4f}")
+    print(f"Recall@{k_value}: {metrics['Recall@K']:.4f}")
+    print(f"NDCG@{k_value}: {metrics['NDCG@K']:.4f}")
+    print(f"Hit Rate@{k_value}: {metrics['Hit Rate']:.4f}")
 except ValueError as e:
     print(f"Error during model evaluation: {e}")
