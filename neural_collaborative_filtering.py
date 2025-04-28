@@ -1,34 +1,39 @@
 import torch
 import torch.nn as nn
 import torch.optim as optim
-import pandas as pd
-from sklearn.metrics import mean_squared_error, f1_score
 import numpy as np
+from sklearn.metrics.pairwise import cosine_similarity
+from ml_model import generate_embeddings  # Import content-based embedding generator
 
 class NeuralCollaborativeFiltering(nn.Module):
-    def __init__(self, num_users, num_items, latent_dim, hidden_dim, dropout_rate=0.3):
+    def __init__(self, num_users, num_items, latent_dim, hidden_dim, dropout_rate=0.3, pretrained_item_embeddings=None):
         super(NeuralCollaborativeFiltering, self).__init__()
         self.user_embedding = nn.Embedding(num_users, latent_dim)
         self.item_embedding = nn.Embedding(num_items, latent_dim)
+
+        # Initialize item embeddings with pretrained embeddings if provided
+        if pretrained_item_embeddings is not None:
+            self.item_embedding.weight.data.copy_(torch.tensor(pretrained_item_embeddings, dtype=torch.float32))
+
         self.fc_layers = nn.Sequential(
             nn.Linear(latent_dim * 2, hidden_dim),
-            nn.BatchNorm1d(hidden_dim),  # Add batch normalization
+            nn.BatchNorm1d(hidden_dim),
             nn.ReLU(),
-            nn.Dropout(dropout_rate),  # Add dropout
+            nn.Dropout(dropout_rate),
             nn.Linear(hidden_dim, 1)
         )
-        self.sigmoid = nn.Sigmoid()  # Add sigmoid activation for binary classification
+        self.sigmoid = nn.Sigmoid()
 
     def forward(self, user, item):
         user_emb = self.user_embedding(user)
         item_emb = self.item_embedding(item)
         x = torch.cat([user_emb, item_emb], dim=1)
-        return self.sigmoid(self.fc_layers(x)).squeeze()  # Apply sigmoid activation
+        return self.sigmoid(self.fc_layers(x)).squeeze()
 
-def train_and_save_model(user_item_matrix, latent_dim=50, hidden_dim=128, epochs=20, lr=0.001, dropout_rate=0.3, l2_reg=0.001, model_path="ncf_model.pth"):
+def train_and_save_model(user_item_matrix, latent_dim=50, hidden_dim=128, epochs=20, lr=0.001, dropout_rate=0.3, l2_reg=0.001, model_path="ncf_model.pth", pretrained_item_embeddings=None):
     num_users, num_items = user_item_matrix.shape
-    model = NeuralCollaborativeFiltering(num_users, num_items, latent_dim, hidden_dim, dropout_rate)
-    optimizer = optim.Adam(model.parameters(), lr=lr, weight_decay=l2_reg)  # Add L2 regularization
+    model = NeuralCollaborativeFiltering(num_users, num_items, latent_dim, hidden_dim, dropout_rate, pretrained_item_embeddings)
+    optimizer = optim.Adam(model.parameters(), lr=lr, weight_decay=l2_reg)
     criterion = nn.BCELoss()
 
     user_item_tensor = torch.tensor(user_item_matrix, dtype=torch.float32)
@@ -40,11 +45,15 @@ def train_and_save_model(user_item_matrix, latent_dim=50, hidden_dim=128, epochs
     if max_rating > 1.0:
         ratings = ratings / max_rating
 
+    # Assign higher weights to rare items
+    item_interaction_counts = torch.bincount(item_indices, minlength=num_items)
+    weights = 1.0 / (item_interaction_counts[item_indices] + 1.0)  # Inverse frequency weighting
+
     for epoch in range(epochs):
         model.train()
         optimizer.zero_grad()
         predictions = model(user_indices, item_indices)
-        loss = criterion(predictions, ratings)
+        loss = criterion(predictions, ratings) * weights.mean()  # Apply weighted loss
         loss.backward()
         optimizer.step()
         print(f"Epoch {epoch + 1}/{epochs}, Loss: {loss.item()}")
@@ -52,6 +61,72 @@ def train_and_save_model(user_item_matrix, latent_dim=50, hidden_dim=128, epochs
     torch.save(model.state_dict(), model_path)
     print(f"Model saved to {model_path}")
     return model
+
+def hybrid_recommendation(user_input, user_item_matrix, model, top_k=5, matrix_index_to_item_id=None, plans=None):
+    """
+    Combine collaborative filtering and content-based filtering for recommendations.
+
+    Parameters:
+        user_input (dict): User inputs for content-based filtering.
+        user_item_matrix (numpy.ndarray): User-item interaction matrix.
+        model (NeuralCollaborativeFiltering): Trained NCF model.
+        top_k (int): Number of top recommendations to return.
+        matrix_index_to_item_id (dict): Mapping from matrix indices to actual item IDs.
+        plans (list): List of plans for content-based filtering.
+
+    Returns:
+        list: Combined recommendations.
+    """
+    print("Starting hybrid recommendation system...")  # Debugging log
+
+    # Collaborative Filtering Predictions
+    user_id = user_input.get("user_id", 0)
+    user_index = user_id  # Assuming user_id maps directly to user_index
+    num_items = user_item_matrix.shape[1]
+    user_tensor = torch.tensor([user_index] * num_items, dtype=torch.long)
+    item_tensor = torch.arange(num_items, dtype=torch.long)
+
+    with torch.no_grad():
+        cf_predictions = model(user_tensor, item_tensor).numpy()
+
+    # Map predictions to item IDs
+    cf_scores = {matrix_index_to_item_id[i]: cf_predictions[i] for i in range(num_items)}
+
+    # Content-Based Filtering
+    if plans:
+        cb_recommendations = generate_embeddings(user_input, plans)
+        cb_scores = {plan["id"]: plan["similarity_score"] for plan in cb_recommendations}
+    else:
+        cb_scores = {}
+
+    # Combine Scores
+    combined_scores = {}
+    for item_id in set(cf_scores.keys()).union(cb_scores.keys()):
+        combined_scores[item_id] = cf_scores.get(item_id, 0) + cb_scores.get(item_id, 0)
+
+    # Sort by combined scores
+    sorted_items = sorted(combined_scores.items(), key=lambda x: x[1], reverse=True)[:top_k]
+
+    # Format recommendations
+    recommendations = [{"item_id": item_id, "score": score} for item_id, score in sorted_items]
+    return recommendations
+
+def recall_at_k_dynamic(predictions, ground_truth, k):
+    """
+    Dynamically adjust Recall@K based on the number of relevant items.
+
+    Parameters:
+        predictions (numpy.ndarray): Predicted scores for items.
+        ground_truth (numpy.ndarray): Ground truth relevance scores.
+        k (int): Number of top recommendations to consider.
+
+    Returns:
+        float: Recall@K.
+    """
+    relevant_items = set(np.where(ground_truth > 0)[0])
+    recommended_items = set(np.argsort(predictions)[-k:][::-1])
+    adjusted_k = min(k, len(relevant_items))  # Adjust K dynamically
+    return len(recommended_items & relevant_items) / adjusted_k if adjusted_k > 0 else 0
 
 def load_ncf_model(model_path="ncf_model.pth", num_users=None, num_items=None, latent_dim=50, hidden_dim=128, dropout_rate=0.3):
     """
@@ -136,44 +211,22 @@ def predict_user_item_interactions(model, user_item_matrix, user_id, top_k=5, ma
 
             # Debugging log: Print the item scores
             print(f"Item scores for user_id {user_id}: {item_scores}")
+
+            # Debugging log: Print the item scores
+            print(f"Item scores for user_id {user_id}: {item_scores}")
+
+            # Debugging log: Print the item scores
+            print(f"Item scores for user_id {user_id}: {item_scores}")
+            # Find the item with index 3 and print its score
+            if 3 in item_scores:
+                print(f"Score for item with index 3: {item_scores[3]}")
+            else:
+                print("Item with index 3 not found in item_scores.")
+
             return item_scores
     except Exception as e:
         print(f"Error during prediction: {e}")  # Debugging log
         return {}  # Return an empty dictionary if an error occurs
-
-def evaluate_model(model, user_item_matrix, threshold=0.5):
-    """
-    Evaluate the model using MSE and F1-score.
-
-    Parameters:
-        model (NeuralCollaborativeFiltering): Trained NCF model.
-        user_item_matrix (numpy.ndarray): User-item interaction matrix.
-        threshold (float): Threshold for binary classification (default: 0.5).
-
-    Returns:
-        tuple: Mean Squared Error (MSE) and F1-score.
-    """
-    user_item_tensor = torch.tensor(user_item_matrix, dtype=torch.float32)
-    user_indices, item_indices = user_item_tensor.nonzero(as_tuple=True)
-    true_ratings = user_item_tensor[user_indices, item_indices].numpy()
-
-    with torch.no_grad():
-        predictions = model(user_indices, item_indices).numpy()
-
-    # Ensure predictions and true ratings are aligned
-    if predictions.shape != true_ratings.shape:
-        print(f"Shape mismatch: true_ratings={true_ratings.shape}, predictions={predictions.shape}")  # Debugging log
-        raise ValueError("Predictions and true ratings must have the same shape.")
-
-    # Calculate MSE
-    mse = mean_squared_error(true_ratings, predictions)
-
-    # Calculate F1-score
-    binary_true = (true_ratings >= threshold).astype(int)
-    binary_pred = (predictions >= threshold).astype(int)
-    f1 = f1_score(binary_true, binary_pred, average="weighted")
-
-    return mse, f1
 
 def precision_at_k(predictions, ground_truth, k):
     """
@@ -209,41 +262,3 @@ def hit_rate(predictions, ground_truth, k):
     top_k_preds = np.argsort(predictions)[-k:][::-1]
     relevant_items = set(np.where(ground_truth > 0)[0])
     return 1 if relevant_items & set(top_k_preds) else 0
-
-def evaluate_model_metrics(model, user_item_matrix, k=5):
-    """
-    Evaluate the model using Precision@K, Recall@K, NDCG@K, and Hit Rate.
-
-    Parameters:
-        model (NeuralCollaborativeFiltering): Trained NCF model.
-        user_item_matrix (numpy.ndarray): User-item interaction matrix.
-        k (int): Number of top recommendations to consider.
-
-    Returns:
-        dict: Evaluation metrics.
-    """
-    num_users, num_items = user_item_matrix.shape
-    precision_scores, recall_scores, ndcg_scores, hit_rates = [], [], [], []
-
-    for user_id in range(num_users):
-        ground_truth = user_item_matrix[user_id]
-        if np.sum(ground_truth) == 0:
-            continue  # Skip users with no interactions
-
-        with torch.no_grad():
-            predictions = model(
-                torch.tensor([user_id] * num_items, dtype=torch.long),
-                torch.arange(num_items, dtype=torch.long)
-            ).numpy()
-
-        precision_scores.append(precision_at_k(predictions, ground_truth, k))
-        recall_scores.append(recall_at_k(predictions, ground_truth, k))
-        ndcg_scores.append(ndcg_at_k(predictions, ground_truth, k))
-        hit_rates.append(hit_rate(predictions, ground_truth, k))
-
-    return {
-        "Precision@K": np.mean(precision_scores),
-        "Recall@K": np.mean(recall_scores),
-        "NDCG@K": np.mean(ndcg_scores),
-        "Hit Rate": np.mean(hit_rates)
-    }
