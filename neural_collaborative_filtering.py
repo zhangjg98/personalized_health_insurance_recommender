@@ -3,7 +3,6 @@ import torch.nn as nn
 import torch.optim as optim
 import pandas as pd
 from sklearn.metrics import mean_squared_error, f1_score
-import shap
 import numpy as np
 
 class NeuralCollaborativeFiltering(nn.Module):
@@ -175,86 +174,6 @@ def evaluate_model(model, user_item_matrix, threshold=0.5):
     f1 = f1_score(binary_true, binary_pred, average="weighted")
 
     return mse, f1
-
-def explain_ncf_predictions(model, user_item_matrix, user_id, item_index, top_n=2):
-    """
-    Use SHAP to explain the predictions of the Neural Collaborative Filtering model.
-
-    Parameters:
-        model (NeuralCollaborativeFiltering): Trained NCF model.
-        user_item_matrix (numpy.ndarray or DataFrame): User-item interaction matrix.
-        user_id (int): User ID for the explanation.
-        item_index (int): Column index of the item in the user-item matrix.
-        top_n (int): Number of top features to include in the explanation.
-
-    Returns:
-        dict: SHAP explanation with top features and their impacts.
-    """
-    # Ensure item_index is valid
-    if item_index is None or item_index < 0 or item_index >= user_item_matrix.shape[1]:
-        print(f"Invalid item_index: {item_index}. Skipping SHAP explanation.")
-        return {"top_features": [], "explanation": "Invalid item_index for SHAP explanation."}
-
-    print(f"Generating SHAP values for user_id {user_id}, item_index {item_index}")  # Debugging log
-    try:
-        # Convert user_item_matrix to a NumPy array if it's a DataFrame
-        if isinstance(user_item_matrix, pd.DataFrame):
-            feature_names = user_item_matrix.columns.tolist()  # Use column names as feature names
-            user_item_matrix = user_item_matrix.values
-        else:
-            feature_names = [f"Plan ID {i}" for i in range(user_item_matrix.shape[1])]  # Fallback feature names
-
-        # Debugging log: Print feature names and matrix dimensions
-        print(f"Feature names: {feature_names}")
-        print(f"User-item matrix dimensions: {user_item_matrix.shape}")
-
-        # Prepare SHAP input data
-        input_data = np.array([[user_id, item_index]])  # SHAP expects user and item indices as input
-        print(f"SHAP input data (shape: {input_data.shape}): {input_data}")  # Debugging log
-
-        # Use all user-item pairs as representative data
-        representative_data = np.array([
-            [user_id, i] for i in range(user_item_matrix.shape[1])
-        ])
-        print(f"SHAP representative data (shape: {representative_data.shape}): {representative_data}")  # Debugging log
-
-        # Define a SHAP explainer
-        explainer = shap.Explainer(lambda x: model(torch.tensor(x[:, 0], dtype=torch.long), torch.tensor(x[:, 1], dtype=torch.long)).detach().numpy(), representative_data)
-        print("SHAP explainer initialized.")  # Debugging log
-
-        # Compute SHAP values
-        shap_values = explainer(input_data)
-        if shap_values is None or shap_values.values is None:
-            print("SHAP values are None. Explanation cannot be generated.")  # Debugging log
-            return {"top_features": [], "explanation": "SHAP explanation could not be generated."}
-
-        # Convert SHAP values to a NumPy array
-        shap_values = np.array(shap_values.values)
-        print(f"SHAP values (shape: {shap_values.shape if hasattr(shap_values, 'shape') else 'unknown'}): {shap_values}")  # Debugging log
-
-        # Validate SHAP values dimensions
-        if shap_values.ndim != 2 or shap_values.shape[1] != len(feature_names):
-            print(f"SHAP values have incorrect dimensions: {shap_values.shape}. Expected: (1, {len(feature_names)})")  # Debugging log
-            return {"top_features": [], "explanation": "SHAP explanation could not be generated due to dimension mismatch."}
-
-        # Extract top features
-        top_features = sorted(
-            enumerate(shap_values[0]), key=lambda x: abs(x[1]), reverse=True
-        )[:top_n]  # Top `n` features
-
-        explanation = []
-        for i, impact in top_features:
-            feature_name = feature_names[i]
-            explanation.append({
-                "feature": feature_name,
-                "impact": round(float(impact), 4),
-                "description": f"The feature '{feature_name}' contributed {round(float(impact), 4)} to this recommendation."
-            })
-
-        return {"top_features": explanation, "explanation": "These features had the highest impact on the recommendation."}
-    except Exception as e:
-        print(f"Error generating SHAP explanation for item_index {item_index}: {e}")  # Debugging log
-        return {"top_features": [], "explanation": "Error occurred while generating SHAP explanation."}
 
 def precision_at_k(predictions, ground_truth, k):
     """
