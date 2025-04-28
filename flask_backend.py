@@ -4,7 +4,9 @@ from database import db, User, Item, Interaction, UserItemMatrix  # Import model
 from propositional_logic import recommend_plan
 from ml_model import predict_medicare_spending
 from thresholds import compute_dynamic_thresholds, unified_thresholds
-from neural_collaborative_filtering import load_ncf_model, predict_user_item_interactions, evaluate_model_metrics
+from neural_collaborative_filtering import load_ncf_model, predict_user_item_interactions
+from evaluation_metrics import evaluate_model_metrics # Import from evaluation_metrics.py
+from utils import filter_irrelevant_plans
 import pandas as pd
 import numpy as np
 import hashlib
@@ -12,6 +14,7 @@ import json  # Ensure JSON encoding/decoding for user_inputs
 import multiprocessing
 import atexit
 import warnings
+from plans import PLANS  # Import the PLANS dictionary
 
 app = Flask(__name__)
 CORS(app)
@@ -353,6 +356,8 @@ def get_or_create_item(plan_name, plan_description="Recommended plan"):
 @app.route('/register', methods=['POST'])
 def register_user():
     data = request.json
+    # Remove the 'id' field if it exists in the request data
+    data.pop('id', None)
     user = User(**data)
     db.session.add(user)
     db.session.commit()
@@ -442,11 +447,30 @@ def get_metrics():
         if NCF_MODEL is None or USER_ITEM_MATRIX is None:
             return jsonify({"error": "Model or user-item matrix not loaded."}), 500
 
-        # Calculate and log evaluation metrics
+        # More permissive dummy user input for evaluation
+        user_input = {
+            "age": "adult",
+            "smoker": "",  # Allow both smokers and non-smokers
+            "bmi": "",
+            "income": "",
+            "family_size": "",
+            "chronic_condition": "",  # Allow both with and without chronic conditions
+            "medical_care_frequency": "",
+            "preferred_plan_type": "",
+            "priority": "",
+            "gender": "",
+            "ethnicity": "",
+            "state": ""
+        }
+
+        # Pass user_input and PLANS to evaluate_model_metrics
         print("Calculating evaluation metrics for the NCF model...")  # Debugging log
-        metrics = evaluate_model_metrics(NCF_MODEL, USER_ITEM_MATRIX.values, k=5)
-        print(f"Evaluation Metrics: Precision@5={metrics['Precision@K']:.4f}, Recall@5={metrics['Recall@K']:.4f}, "
-              f"NDCG@5={metrics['NDCG@K']:.4f}, Hit Rate@5={metrics['Hit Rate']:.4f}")  # Debugging log
+        k_percentage = 0.5  # Adjust k value as a percentage of the number of items
+        num_items = USER_ITEM_MATRIX.shape[1]
+        k_value = int(num_items * k_percentage)
+        metrics = evaluate_model_metrics(NCF_MODEL, USER_ITEM_MATRIX.values, k=k_value, user_inputs=user_input, plans=PLANS)
+        print(f"Evaluation Metrics: Precision@{k_value}={metrics['Precision@K']:.4f}, Recall@{k_value}={metrics['Recall@K']:.4f}, "
+              f"NDCG@{k_value}={metrics['NDCG@K']:.4f}, Hit Rate@{k_value}={metrics['Hit Rate']:.4f}")  # Debugging log
 
         return jsonify(metrics)
     except Exception as e:
