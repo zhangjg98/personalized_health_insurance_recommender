@@ -6,7 +6,7 @@ from thresholds import unified_thresholds  # Import dynamic thresholds
 from ml_model import content_based_filtering  # Use trained data for thresholds
 from neural_collaborative_filtering import predict_user_item_interactions, load_ncf_model
 from plans import PLANS  # Import plans from plans dictionary
-from neural_collaborative_filtering import evaluate_model_metrics  # Import evaluation metrics function
+from utils import filter_irrelevant_plans  # Import the filtering function
 
 # Description: This file contains the propositional logic for the insurance recommender system.
 
@@ -541,40 +541,19 @@ def recommend_plan(user_input, priority="", ml_prediction_df=None):
 
     if (not strongly_recommended_plans and USER_ITEM_MATRIX is not None):
         # Step 1: Filter irrelevant plans during content-based filtering
-        def filter_irrelevant_plans(user_input, plans):
-            filtered_plans = []
-            for plan in plans:
-                if (user_input.get("smoker") == "no" and "smoker" in plan["description"].lower()):
-                    continue
-                if (user_input.get("chronic_condition") == "no" and "chronic" in plan["description"].lower()):
-                    continue
-                if (user_input.get("family_size") not in ["2_to_3", "4_plus"] and "family" in plan["description"].lower()):
-                    continue
-                if (user_input.get("age") == "young_adult" and "senior" in plan["description"].lower()):
-                    continue
-                if (user_input.get("preferred_plan_type") and user_input["preferred_plan_type"] not in plan["name"]):
-                    continue
-                filtered_plans.append(plan)
-            return filtered_plans
-
         plans = [{"id": item.id, "name": item.name, "description": item.description} for item in Item.query.all()]
-        filtered_plans = filter_irrelevant_plans(user_input, plans)
+        filtered_plans = filter_irrelevant_plans(plans, user_input)
 
         # Debugging log: Check filtered plans
         print("Filtered plans:", filtered_plans)
 
         # Step 2: Perform content-based filtering with hard constraints
-        plans = [{"id": item.id, "name": item.name, "description": item.description} for item in Item.query.all()]
-        filtered_plans = filter_irrelevant_plans(user_input, plans)
-
-        # Debugging log: Check filtered plans
-        print("Filtered plans:", filtered_plans)
 
         # Step 2.1: Validate plans against the user-item matrix
         valid_item_ids = set(USER_ITEM_MATRIX.columns)
         filtered_plans = [plan for plan in filtered_plans if (plan["id"] in valid_item_ids)]
 
-        # Debugging log: Check valid plans after filtering against the matrix
+        # Debugging log: Check valid plans after filtering against the user-item matrix
         print("Valid plans after filtering against the user-item matrix:", filtered_plans)
 
         # Step 2.2: Log warnings for plans with no interactions but do not exclude them
@@ -592,7 +571,27 @@ def recommend_plan(user_input, priority="", ml_prediction_df=None):
         if (not filtered_plans):
             print("No valid plans found after filtering against the user-item matrix.")  # Debugging log
         else:
-            ranked_plans = content_based_filtering(user_input, filtered_plans)
+            # Debugging: Print item scores before content-based filtering
+            print("Item scores before content-based filtering:")
+            item_scores = {}
+            for plan in filtered_plans:
+                item_id = plan["id"]
+                if item_id in item_id_to_matrix_index:
+                    matrix_index = item_id_to_matrix_index[item_id]
+                    # Get the collaborative filtering score for the item
+                    cf_score = predict_user_item_interactions(
+                        NCF_MODEL,
+                        USER_ITEM_MATRIX,
+                        user_index,
+                        top_k=None,
+                        matrix_index_to_item_id=matrix_index_to_item_id
+                    ).get(item_id, 0)  # Default to 0 if not found
+                    item_scores[item_id] = cf_score
+                    print(f"Item ID: {item_id}, Matrix Index: {matrix_index}, CF Score: {cf_score}")
+                else:
+                    print(f"Item ID: {item_id} not found in item_id_to_matrix_index")
+
+            ranked_plans = content_based_filtering(user_input, filtered_plans, item_scores=item_scores)
 
             # Limit to the top-ranked content-based recommendation
             if (ranked_plans):
@@ -641,12 +640,6 @@ def recommend_plan(user_input, priority="", ml_prediction_df=None):
                         rec["disclaimer_note"] = "These plans are generated using advanced filtering techniques to provide additional insights."
 
                 recommendations.sort(key=lambda x: x["score"], reverse=True)
-
-                # Log evaluation metrics after collaborative filtering
-                print("Calculating evaluation metrics after collaborative filtering...")  # Debugging log
-                metrics = evaluate_model_metrics(NCF_MODEL, USER_ITEM_MATRIX.values, k=5)
-                print(f"Evaluation Metrics: Precision@5={metrics['Precision@K']:.4f}, Recall@5={metrics['Recall@K']:.4f}, "
-                      f"NDCG@5={metrics['NDCG@K']:.4f}, Hit Rate@5={metrics['Hit Rate']:.4f}")  # Debugging log
 
                 return recommendations
             except Exception as e:
