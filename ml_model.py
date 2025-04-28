@@ -8,7 +8,6 @@ from models import DeepAutoencoder
 from thresholds import unified_thresholds
 from sentence_transformers import SentenceTransformer
 from sklearn.metrics.pairwise import cosine_similarity
-import shap
 import matplotlib.pyplot as plt
 
 # Define hyperparameters used during training
@@ -202,49 +201,3 @@ def content_based_filtering(user_input, plans):
     # Sort plans by similarity score in descending order
     ranked_plans = sorted(filtered_plans, key=lambda x: x['similarity_score'], reverse=True)
     return ranked_plans
-
-def visualize_shap_summary(model, user_item_matrix):
-    """
-    Generate a SHAP summary plot for the NCF model.
-
-    Parameters:
-        model (NeuralCollaborativeFiltering): Trained NCF model.
-        user_item_matrix (DataFrame): User-item interaction matrix.
-    """
-    try:
-        # Prepare representative data for SHAP
-        representative_data = user_item_matrix.values
-        explainer = shap.Explainer(model, representative_data)
-        shap_values = explainer(representative_data)
-
-        # Generate summary plot
-        shap.summary_plot(shap_values, representative_data, feature_names=user_item_matrix.columns)
-    except Exception as e:
-        print(f"Error generating SHAP summary plot: {e}")
-
-def visualize_shap_force(model, user_item_matrix, user_id, item_id):
-    """
-    Generate a SHAP force plot for a specific user-item pair.
-
-    Parameters:
-        model (NeuralCollaborativeFiltering): Trained NCF model.
-        user_item_matrix (DataFrame): User-item interaction matrix.
-        user_id (int): User ID.
-        item_id (int): Item ID.
-    """
-    try:
-        # Prepare input for SHAP
-        representative_data = user_item_matrix.values
-        explainer = shap.Explainer(model, representative_data)
-        shap_values = explainer(representative_data)
-
-        # Generate force plot
-        shap.force_plot(
-            explainer.expected_value,
-            shap_values[user_id],
-            feature_names=user_item_matrix.columns,
-            matplotlib=True
-        )
-        plt.show()
-    except Exception as e:
-        print(f"Error generating SHAP force plot: {e}")
