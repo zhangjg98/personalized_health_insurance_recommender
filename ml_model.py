@@ -141,13 +141,14 @@ def generate_embeddings(texts):
     embeddings = EMBEDDING_MODEL.encode(texts, convert_to_tensor=True)
     return embeddings.cpu().numpy()  # Move to CPU and convert to NumPy
 
-def content_based_filtering(user_input, plans):
+def content_based_filtering(user_input, plans, item_scores=None):
     """
     Perform content-based filtering by calculating similarity between user inputs and plan descriptions.
 
     Parameters:
         user_input (dict): User inputs containing preferences.
         plans (list): List of plans with descriptions.
+        item_scores (dict): Dictionary of collaborative filtering scores for each item.
 
     Returns:
         list: Ranked plans with similarity scores.
@@ -166,6 +167,16 @@ def content_based_filtering(user_input, plans):
     # Add similarity scores to plans
     for i, plan in enumerate(plans):
         plan['similarity_score'] = similarities[i]
+
+        # Combine collaborative filtering and content-based filtering scores
+        item_id = plan["id"]
+        if item_scores and item_id in item_scores:
+            cf_score = item_scores[item_id]
+            cb_score = plan['similarity_score']
+            # Use a weighted average of the two scores
+            plan['combined_score'] = 0.7 * cf_score + 0.3 * cb_score  # Adjust weights as needed
+        else:
+            plan['combined_score'] = plan['similarity_score']  # Use only content-based score if no CF score
 
     # Apply hard constraints to filter out irrelevant plans
     def violates_constraints(plan, user_input):
@@ -198,6 +209,6 @@ def content_based_filtering(user_input, plans):
     # Filter out plans that violate constraints
     filtered_plans = [plan for plan in plans if not violates_constraints(plan, user_input)]
 
-    # Sort plans by similarity score in descending order
-    ranked_plans = sorted(filtered_plans, key=lambda x: x['similarity_score'], reverse=True)
+    # Sort plans by combined score in descending order
+    ranked_plans = sorted(filtered_plans, key=lambda x: x['combined_score'], reverse=True)
     return ranked_plans
