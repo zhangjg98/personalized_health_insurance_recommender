@@ -1,15 +1,15 @@
 {
   "files": {
     "main.css": "/personalized_health_insurance_recommender/static/css/main.0d7cf653.css",
-    "main.js": "/personalized_health_insurance_recommender/static/js/main.ad123b24.js",
+    "main.js": "/personalized_health_insurance_recommender/static/js/main.d9945a0d.js",
     "static/js/453.01204a0c.chunk.js": "/personalized_health_insurance_recommender/static/js/453.01204a0c.chunk.js",
     "index.html": "/personalized_health_insurance_recommender/index.html",
     "main.0d7cf653.css.map": "/personalized_health_insurance_recommender/static/css/main.0d7cf653.css.map",
-    "main.ad123b24.js.map": "/personalized_health_insurance_recommender/static/js/main.ad123b24.js.map",
+    "main.d9945a0d.js.map": "/personalized_health_insurance_recommender/static/js/main.d9945a0d.js.map",
     "453.01204a0c.chunk.js.map": "/personalized_health_insurance_recommender/static/js/453.01204a0c.chunk.js.map"
   },
   "entrypoints": [
     "static/css/main.0d7cf653.css",
-    "static/js/main.ad123b24.js"
+    "static/js/main.d9945a0d.js"
   ]
 }
