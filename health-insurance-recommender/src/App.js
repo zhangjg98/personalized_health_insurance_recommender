@@ -47,7 +47,8 @@ function App() {
     try {
       const payload = { ...formData, user_id: 1 }; // Use static user_id for now
       localStorage.setItem("latestUserInput", JSON.stringify(payload)); // Save the latest user input to localStorage
-      const response = await fetch("/recommend", {
+      const backendUrl = process.env.REACT_APP_BACKEND_URL || "http://127.0.0.1:5000"; // Use environment variable or default
+      const response = await fetch(`${backendUrl}/recommend`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -203,7 +204,7 @@ const logSpecificPlanFeedback = async () => {
   }, [recommendations]);
 
   return (
-    <Router>
+    <Router basename={process.env.NODE_ENV === 'production' ? '/personalized_health_insurance_recommender' : ''}>
       <Container className="mt-4">
         <h1 className="mb-4 text-center">Personalized Health Insurance Recommender</h1>
         <Routes> {/* Replace Switch with Routes */}
