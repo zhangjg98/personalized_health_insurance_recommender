@@ -47,7 +47,7 @@ function App() {
     try {
       const payload = { ...formData, user_id: 1 }; // Use static user_id for now
       localStorage.setItem("latestUserInput", JSON.stringify(payload)); // Save the latest user input to localStorage
-      const backendUrl = process.env.REACT_APP_BACKEND_URL || "http://127.0.0.1:5000"; // Use environment variable or default
+      const backendUrl = process.env.REACT_APP_BACKEND_URL || "http://127.0.0.1:5000";
       const response = await fetch(`${backendUrl}/recommend`, {
         method: "POST",
         headers: {
