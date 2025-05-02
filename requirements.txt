@@ -20,3 +20,4 @@ matplotlib
 flask-sqlalchemy
 cryptography
 gunicorn
+python-dotenv
