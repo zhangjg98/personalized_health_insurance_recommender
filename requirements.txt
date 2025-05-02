@@ -19,3 +19,4 @@ sentence-transformers
 matplotlib
 flask-sqlalchemy
 cryptography
+gunicorn
