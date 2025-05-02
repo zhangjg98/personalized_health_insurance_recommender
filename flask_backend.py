@@ -1,5 +1,14 @@
-from flask import Flask, render_template, request, jsonify
+from flask import Flask, request, jsonify, render_template
 from flask_cors import CORS
+import pandas as pd
+import numpy as np
+import os  # Import the os module
+import hashlib
+import json  # Ensure JSON encoding/decoding for user_inputs
+import multiprocessing
+import atexit
+import warnings
+from plans import PLANS  # Import the PLANS dictionary
 from database import db, User, Item, Interaction, UserItemMatrix  # Import models from database.py
 from propositional_logic import recommend_plan
 from ml_model import predict_medicare_spending
@@ -7,23 +16,18 @@ from thresholds import compute_dynamic_thresholds, unified_thresholds
 from neural_collaborative_filtering import load_ncf_model, predict_user_item_interactions
 from evaluation_metrics import evaluate_model_metrics # Import from evaluation_metrics.py
 from utils import filter_irrelevant_plans
-import pandas as pd
-import numpy as np
-import hashlib
-import json  # Ensure JSON encoding/decoding for user_inputs
-import multiprocessing
-import atexit
-import warnings
-from plans import PLANS  # Import the PLANS dictionary
+from dotenv import load_dotenv
+
+load_dotenv()  # Load environment variables from .env file
 
 app = Flask(__name__)
-CORS(app)
+CORS(app, origins=["https://zhangjg98.github.io/personalized_health_insurance_recommender/"])
 
 # Add this line to disable CSRF protection for testing
 app.config['WTF_CSRF_ENABLED'] = False
 
 # Configure PostgreSQL database
-app.config['SQLALCHEMY_DATABASE_URI'] = 'postgresql://recommender_user:securepassword@localhost/health_insurance_recommender'
+app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL')  # Set the database URI from the environment variable
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 db.init_app(app)  # Initialize the database with the Flask app
@@ -506,4 +510,5 @@ atexit.register(cleanup_resources)
 if __name__ == "__main__":  # Ensure debug=True is set
     with app.app_context():
         create_tables()
-    app.run(debug=True)
+    port = int(os.environ.get("PORT", 5000))  # Default to 5000 if no PORT env var
+    app.run(host="0.0.0.0", port=port)
