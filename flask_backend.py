@@ -36,8 +36,6 @@ def create_tables():
     with app.app_context():
         db.create_all()
 
-create_tables()
-
 # Define a mapping from technical to friendly names (for key metrics)
 friendly_names = {
     'TOT_MDCR_STDZD_PYMT_PC': "Standardized Medicare Payment per Capita",
@@ -507,8 +505,9 @@ def cleanup_resources():
 # Register the cleanup function to run at application exit
 atexit.register(cleanup_resources)
 
-if __name__ == "__main__":  # Ensure debug=True is set
-    with app.app_context():
-        create_tables()
-    port = int(os.environ.get("PORT", 5000))  # Default to 5000 if no PORT env var
+if __name__ == "__main__":
+    if os.environ.get("FLASK_ENV") != "production":
+        with app.app_context():
+            create_tables()
+    port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port)
