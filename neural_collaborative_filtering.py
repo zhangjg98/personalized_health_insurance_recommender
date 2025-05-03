@@ -81,7 +81,10 @@ def hybrid_recommendation(user_input, user_item_matrix, model, top_k=5, matrix_i
 
     # Collaborative Filtering Predictions
     user_id = user_input.get("user_id", 0)
-    user_index = user_id  # Assuming user_id maps directly to user_index
+    try:
+        user_index = int(user_id)  # Try converting to int
+    except ValueError:
+        user_index = 0  # Default index if user_id is not a valid integer
     num_items = user_item_matrix.shape[1]
     user_tensor = torch.tensor([user_index] * num_items, dtype=torch.long)
     item_tensor = torch.arange(num_items, dtype=torch.long)
