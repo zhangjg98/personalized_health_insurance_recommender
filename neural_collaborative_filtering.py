@@ -84,13 +84,27 @@ def hybrid_recommendation(user_input, user_item_matrix, model, top_k=5, matrix_i
     try:
         user_index = int(user_id)  # Try converting to int
     except ValueError:
-        user_index = 0  # Default index if user_id is not a valid integer
+        user_index = None  # Default to None if user_id is not valid
+
     num_items = user_item_matrix.shape[1]
-    user_tensor = torch.tensor([user_index] * num_items, dtype=torch.long)
+    if user_index is not None and 0 <= user_index < user_item_matrix.shape[0]:
+        # Valid user ID found in the matrix
+        user_tensor = torch.tensor([user_index] * num_items, dtype=torch.long)
+    else:
+        # Use a default "average user" profile for new/guest users
+        print("User ID not found in the matrix. Using default collaborative filtering profile.")  # Debugging log
+        average_user_profile = user_item_matrix.mean(axis=0)
+        user_tensor = torch.tensor([0] * num_items, dtype=torch.long)  # Dummy tensor for compatibility
+        average_user_tensor = torch.tensor(average_user_profile, dtype=torch.float32)
+
     item_tensor = torch.arange(num_items, dtype=torch.long)
 
     with torch.no_grad():
-        cf_predictions = model(user_tensor, item_tensor).numpy()
+        if user_index is not None and 0 <= user_index < user_item_matrix.shape[0]:
+            cf_predictions = model(user_tensor, item_tensor).numpy()
+        else:
+            # Use the average user profile for predictions
+            cf_predictions = average_user_tensor.numpy()
 
     # Map predictions to item IDs
     cf_scores = {matrix_index_to_item_id[i]: cf_predictions[i] for i in range(num_items)}
@@ -105,7 +119,9 @@ def hybrid_recommendation(user_input, user_item_matrix, model, top_k=5, matrix_i
     # Combine Scores
     combined_scores = {}
     for item_id in set(cf_scores.keys()).union(cb_scores.keys()):
-        combined_scores[item_id] = cf_scores.get(item_id, 0) + cb_scores.get(item_id, 0)
+        cf_score = cf_scores.get(item_id, 0)
+        cb_score = cb_scores.get(item_id, 0)
+        combined_scores[item_id] = 0.7 * cf_score + 0.3 * cb_score  # Adjust weights as needed
 
     # Sort by combined scores
     sorted_items = sorted(combined_scores.items(), key=lambda x: x[1], reverse=True)[:top_k]
