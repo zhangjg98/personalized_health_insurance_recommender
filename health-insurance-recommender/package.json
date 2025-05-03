@@ -4,6 +4,7 @@
   "private": true,
   "homepage": "https://zhangjg98.github.io/personalized_health_insurance_recommender",
   "dependencies": {
+    "@supabase/supabase-js": "^2.49.4",
     "@testing-library/dom": "^10.4.0",
     "@testing-library/jest-dom": "^6.6.3",
     "@testing-library/react": "^16.2.0",
