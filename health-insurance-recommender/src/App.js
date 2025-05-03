@@ -53,19 +53,22 @@ function App() {
     setSelectedFeedback(null);
     setSelectedRecommendation("");
 
+    let userId = "1"; // Default user ID
+
     try {
-      const {
-        data: { user },
-        error,
-      } = await supabase.auth.getUser();
-    
-      if (error || !user) {
-        throw new Error("User not authenticated.");
+      const { data: { user }, error: authError } = await supabase.auth.getUser();
+
+      if (user) {
+        userId = user.id; // Use authenticated user ID if available
+      } else {
+        // Generate a temporary user ID for unauthenticated users
+        userId = `guest_${Math.random().toString(36).substring(2, 15)}`;
+        console.log("Unauthenticated user. Generated temporary user ID:", userId);
       }
-    
-      const payload = { ...formData, user_id: "1" };
+
+      const payload = { ...formData, user_id: userId };
       localStorage.setItem("latestUserInput", JSON.stringify(payload));
-    
+
       const backendUrl = process.env.REACT_APP_BACKEND_URL?.replace(/\/+$/, "") || "http://127.0.0.1:5000";
       const response = await fetch(`${backendUrl}/recommend`, {
         method: "POST",
@@ -74,7 +77,7 @@ function App() {
         },
         body: JSON.stringify(payload),
       });
-    
+
       if (!response.ok) {
         throw new Error(`Server error: ${response.status}`);
       }
