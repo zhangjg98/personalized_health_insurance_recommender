@@ -1,0 +1,2 @@
+"use strict";(self.webpackChunkhealth_insurance_recommender=self.webpackChunkhealth_insurance_recommender||[]).push([[952],{952:e=>{e.exports=function(){throw new Error("ws does not work in the browser. Browser clients must use the native WebSocket object")}}}]);
+//# sourceMappingURL=952.c578631c.chunk.js.map
