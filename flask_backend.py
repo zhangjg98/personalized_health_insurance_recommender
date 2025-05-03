@@ -21,7 +21,7 @@ from dotenv import load_dotenv
 load_dotenv()  # Load environment variables from .env file
 
 app = Flask(__name__)
-CORS(app, origins=["https://zhangjg98.github.io"], methods=['GET', 'POST', 'OPTIONS'])
+CORS(app, origins=["https://zhangjg98.github.io"], methods=["GET", "POST", "OPTIONS"])
 
 print("Flask app initialized.")  # Debugging log
 
@@ -98,9 +98,12 @@ except ValueError as e:
 
 @app.before_request
 def log_request_info():
-    print("Received a request.")  # Debugging log
+    print("Received a request.")
     print("Request method:", request.method)
     print("Request URL:", request.url)
+    print("Request headers:", request.headers)
+    if request.method == "POST":
+        print("Request body:", request.get_json())
 
 @app.route('/')
 def home():
