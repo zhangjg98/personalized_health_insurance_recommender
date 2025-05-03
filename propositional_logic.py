@@ -132,16 +132,31 @@ def recommend_plan(user_input, priority="", ml_prediction_df=None):
                 }]
 
             # Map the actual user_id to the zero-based index in the matrix
-            try:
-                user_index = USER_ITEM_MATRIX.index.tolist().index(user_id)  # Map to zero-based index
+            if user_id in USER_ITEM_MATRIX.index:
+                user_index = USER_ITEM_MATRIX.index.tolist().index(user_id)
                 print(f"Mapped user_id {user_id} to user_index {user_index}.")  # Debugging log
-            except ValueError:
+            else:
                 print(f"User ID {user_id} not found in the user-item matrix.")  # Debugging log
-                return [{
-                    "plan": "No Recommendation Available",
-                    "justification": "User ID not found in the user-item matrix. Please provide feedback to improve recommendations.",
-                    "priority": "fallback"
-                }]
+                print("Attempting cold start strategy for collaborative filtering.")  # Debugging log
+
+                # Cold Start Strategy: Find similar users based on demographic features
+                similar_users = USER_ITEM_MATRIX.index[
+                    (USER_ITEM_MATRIX['age_group'] == user_input.get('age')) &
+                    (USER_ITEM_MATRIX['smoker'] == (user_input.get('smoker') == 'yes')) &
+                    (USER_ITEM_MATRIX['chronic_condition'] == (user_input.get('chronic_condition') == 'yes'))
+                ]
+
+                if not similar_users.empty:
+                    print(f"Found similar users: {similar_users}")  # Debugging log
+                    # Use the average interaction scores of similar users
+                    average_scores = USER_ITEM_MATRIX.loc[similar_users].mean(axis=0)
+                    recommendations = average_scores.sort_values(ascending=False).head(5).index.tolist()
+                    print(f"Generated recommendations based on similar users: {recommendations}")  # Debugging log
+                else:
+                    print("No similar users found. Falling back to content-based filtering.")  # Debugging log
+                    recommendations = []  # Fallback to content-based filtering later
+
+                user_index = None  # Skip collaborative filtering for this user
         except Exception as e:
             print(f"Error during matrix-related logic: {e}")  # Debugging log
     else:
