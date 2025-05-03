@@ -141,14 +141,12 @@ def compute_composite_ml_score(spending, risk, er_rate, thresholds):
 @app.route('/recommend', methods=['POST'])
 def recommend():
     try:
-        print("Starting /recommend endpoint...")  # Debugging log
+        print("Starting /recommend endpoint.")
         user_input = request.json
-        print("Received user input:", user_input)  # Debugging log
+        print("Received user input:", user_input)
 
-        user_id = int(user_input.get("user_id", -1))
-        if user_id == -1:
-            print("Invalid user_id provided.")  # Debugging log
-            return jsonify({"error": "Invalid user_id. Please ensure you are logged in or registered."}), 400
+        # Convert user_id to string
+        user_id = str(user_input.get('user_id', '1'))
 
         # Generate ML predictions and insights only if a state is provided
         ml_prediction_df = None
@@ -371,14 +369,14 @@ def log_interaction():
         data = request.json
         print("Received interaction data:", data)  # Debugging log
 
-        user_id = data.get('user_id')
+        user_id = str(data.get('user_id'))  # Convert user_id to string
         item_id = data.get('item_id')  # This could be an integer, a string, or a plan_name
         rating = data.get('rating')
         user_inputs = data.get('user_inputs', {})  # Get user inputs from the request
 
         # Validate user_id
-        if not user_id or not isinstance(user_id, int):
-            return jsonify({"error": "Invalid or missing user_id. Ensure it is an integer."}), 400
+        if not user_id:
+            return jsonify({"error": "Invalid or missing user_id. Ensure it is a string."}), 400
 
         # Validate rating
         if rating is None or not isinstance(rating, (int, float)):
