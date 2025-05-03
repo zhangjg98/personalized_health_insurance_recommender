@@ -4,6 +4,7 @@ import ReactTooltip from "react-tooltip";
 import { BrowserRouter as Router, Routes, Route, Link } from "react-router-dom"; // Replace Switch with Routes
 import "bootstrap/dist/css/bootstrap.min.css";
 import MetricsDashboard from "./MetricsDashboard"; // Ensure MetricsDashboard is imported only once
+import { supabase } from './supabaseClient.js';
 
 function App() {
   const [formData, setFormData] = useState({
@@ -45,8 +46,18 @@ function App() {
     setSelectedRecommendation("");
 
     try {
-      const payload = { ...formData, user_id: 1 }; // Use static user_id for now
-      localStorage.setItem("latestUserInput", JSON.stringify(payload)); // Save the latest user input to localStorage
+      const {
+        data: { user },
+        error,
+      } = await supabase.auth.getUser();
+    
+      if (error || !user) {
+        throw new Error("User not authenticated.");
+      }
+    
+      const payload = { ...formData, user_id: "1" };
+      localStorage.setItem("latestUserInput", JSON.stringify(payload));
+    
       const backendUrl = process.env.REACT_APP_BACKEND_URL?.replace(/\/+$/, "") || "http://127.0.0.1:5000";
       const response = await fetch(`${backendUrl}/recommend`, {
         method: "POST",
@@ -55,7 +66,7 @@ function App() {
         },
         body: JSON.stringify(payload),
       });
-
+    
       if (!response.ok) {
         throw new Error(`Server error: ${response.status}`);
       }
