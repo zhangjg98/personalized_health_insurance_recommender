@@ -21,7 +21,7 @@ from dotenv import load_dotenv
 load_dotenv()  # Load environment variables from .env file
 
 app = Flask(__name__)
-CORS(app, origins=["https://zhangjg98.github.io"])
+CORS(app, origins=["https://zhangjg98.github.io"], methods=['GET', 'POST', 'OPTIONS'])
 
 # Add this line to disable CSRF protection for testing
 app.config['WTF_CSRF_ENABLED'] = False
