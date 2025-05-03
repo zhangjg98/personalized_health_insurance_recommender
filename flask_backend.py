@@ -23,6 +23,8 @@ load_dotenv()  # Load environment variables from .env file
 app = Flask(__name__)
 CORS(app, origins=["https://zhangjg98.github.io"], methods=['GET', 'POST', 'OPTIONS'])
 
+print("Flask app initialized.")  # Debugging log
+
 # Add this line to disable CSRF protection for testing
 app.config['WTF_CSRF_ENABLED'] = False
 
@@ -94,6 +96,12 @@ except ValueError as e:
     NCF_MODEL = None
     USER_ITEM_MATRIX = None
 
+@app.before_request
+def log_request_info():
+    print("Received a request.")  # Debugging log
+    print("Request method:", request.method)
+    print("Request URL:", request.url)
+
 @app.route('/')
 def home():
     return render_template('index.html')
@@ -142,11 +150,16 @@ def compute_composite_ml_score(spending, risk, er_rate, thresholds):
 def recommend():
     try:
         print("Starting /recommend endpoint.")
-        user_input = request.json
-        print("Received user input:", user_input)
+        print("Request Headers:", request.headers)  # Log request headers
+        try:
+            user_input = request.get_json()
+            print("Received user input:", user_input)
+        except Exception as e:
+            print(f"Error parsing JSON: {e}")
+            user_input = None
 
         # Convert user_id to string
-        user_id = str(user_input.get('user_id', '1'))
+        user_id = str(user_input.get('user_id', '1')) if user_input else '1'
 
         # Generate ML predictions and insights only if a state is provided
         ml_prediction_df = None
