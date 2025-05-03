@@ -4,7 +4,15 @@ import ReactTooltip from "react-tooltip";
 import { BrowserRouter as Router, Routes, Route, Link } from "react-router-dom"; // Replace Switch with Routes
 import "bootstrap/dist/css/bootstrap.min.css";
 import MetricsDashboard from "./MetricsDashboard"; // Ensure MetricsDashboard is imported only once
-import { supabase } from './supabaseClient.js';
+import { createClient } from '@supabase/supabase-js';
+
+const supabaseUrl = process.env.REACT_APP_SUPABASE_URL;
+const supabaseAnonKey = process.env.REACT_APP_SUPABASE_ANON_KEY;
+
+console.log("Supabase URL:", supabaseUrl); // Debugging log
+console.log("Supabase Anon Key:", supabaseAnonKey); // Debugging log
+
+export const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
 function App() {
   const [formData, setFormData] = useState({
