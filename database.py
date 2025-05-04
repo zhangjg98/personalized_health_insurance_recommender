@@ -3,6 +3,7 @@ from sqlalchemy.dialects.postgresql import JSON
 from sqlalchemy.sql import text
 from cryptography.fernet import Fernet
 import os
+from sqlalchemy.exc import OperationalError, InvalidRequestError
 
 db = SQLAlchemy()
 
@@ -100,3 +101,13 @@ def verify_encryption(encrypted_data):
         return cipher.decrypt(encrypted_data).decode('utf-8')
     except Exception as e:
         return None
+
+def rollback_transaction():
+    """
+    Rollback the current database transaction if it is in an invalid state.
+    """
+    try:
+        db.session.rollback()
+        print("Transaction rolled back successfully.")
+    except InvalidRequestError as e:
+        print(f"Error rolling back transaction: {e}")
