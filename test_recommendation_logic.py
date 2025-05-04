@@ -1,3 +1,4 @@
+from flask_backend import app
 from propositional_logic import recommend_plan
 
 def test_recommendation_logic():
@@ -16,11 +17,12 @@ def test_recommendation_logic():
         "user_id": 1
     }
 
-    # Call the recommendation function
-    recommendations = recommend_plan(user_input)
-    print("Recommendations:")
-    for rec in recommendations:
-        print(f"Plan: {rec['plan']}, Justification: {rec['justification']}, Priority: {rec['priority']}")
+    # Wrap the test in a Flask application context
+    with app.app_context():
+        # Call the recommendation function
+        recommendations = recommend_plan(user_input)
+        assert recommendations is not None
+        assert len(recommendations) > 0
 
 if __name__ == "__main__":
     test_recommendation_logic()
