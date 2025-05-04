@@ -7,6 +7,7 @@ from ml_model import content_based_filtering  # Use trained data for thresholds
 from neural_collaborative_filtering import predict_user_item_interactions, load_ncf_model
 from plans import PLANS  # Import plans from plans dictionary
 from utils import filter_irrelevant_plans  # Import the filtering function
+from sqlalchemy.exc import OperationalError, InvalidRequestError
 
 # Description: This file contains the propositional logic for the insurance recommender system.
 
