@@ -7,6 +7,7 @@ from flask import Flask
 from plans import PLANS
 from dotenv import load_dotenv
 import requests
+import torch
 
 load_dotenv()
 
@@ -42,37 +43,50 @@ print("User-item matrix saved to user_item_matrix.csv")
 user_item_matrix = user_item_matrix.values
 num_users, num_items = user_item_matrix.shape
 
-if not os.path.exists("ncf_model.pth"):
-    print("ncf_model.pth not found. Retraining the model from scratch...")
+MODEL_PATH = "ncf_model.pth"
+latent_dim = 50
+hidden_dim = 128
+
+retrain_model = False
+
+if os.path.exists(MODEL_PATH):
+    print("Checking saved NCF model compatibility...")
+    try:
+        saved_state = torch.load(MODEL_PATH, map_location="cpu")
+        saved_user_embedding = saved_state['user_embedding.weight'].shape[0]
+        saved_item_embedding = saved_state['item_embedding.weight'].shape[0]
+
+        if saved_user_embedding != num_users or saved_item_embedding != num_items:
+            print(f"Model dimension mismatch: saved (users={saved_user_embedding}, items={saved_item_embedding}), current (users={num_users}, items={num_items})")
+            retrain_model = True
+        else:
+            print("Saved model dimensions match current data. Proceeding to load model.")
+    except Exception as e:
+        print(f"Error reading saved model: {e}")
+        retrain_model = True
+else:
+    print("Model file not found.")
+    retrain_model = True
+
+if retrain_model:
+    print("Retraining the model from scratch...")
     NCF_MODEL = train_and_save_model(
         user_item_matrix,
-        latent_dim=50,
-        hidden_dim=128,
+        latent_dim=latent_dim,
+        hidden_dim=hidden_dim,
         epochs=20,
         lr=0.001,
-        model_path="ncf_model.pth"
+        model_path=MODEL_PATH
     )
 else:
-    print("Loading the Neural Collaborative Filtering (NCF) model...")
-    try:
-        NCF_MODEL = load_ncf_model(
-            model_path="ncf_model.pth",
-            num_users=num_users,
-            num_items=num_items,
-            latent_dim=50,
-            hidden_dim=128
-        )
-        print("NCF model loaded successfully.")
-    except RuntimeError as e:
-        print(f"Error loading NCF model: {e}. Retraining the model from scratch.")
-        NCF_MODEL = train_and_save_model(
-            user_item_matrix,
-            latent_dim=50,
-            hidden_dim=128,
-            epochs=20,
-            lr=0.001,
-            model_path="ncf_model.pth"
-        )
+    NCF_MODEL = load_ncf_model(
+        model_path=MODEL_PATH,
+        num_users=num_users,
+        num_items=num_items,
+        latent_dim=latent_dim,
+        hidden_dim=hidden_dim
+    )
+    print("NCF model loaded successfully.")
 
 try:
     # Dummy user input for evaluation
