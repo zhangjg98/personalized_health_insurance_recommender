@@ -130,7 +130,8 @@ function App() {
 
     // For single-plan recommendations, log the interaction directly
     try {
-        const response = await fetch('/log_interaction', {
+        const backendUrl = process.env.REACT_APP_BACKEND_URL?.replace(/\/+$/, "") || "http://127.0.0.1:5000";
+        const response = await fetch(`${backendUrl}/log_interaction`, { // Use backend URL
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -159,7 +160,8 @@ const logSpecificPlanFeedback = async () => {
     if (!selectedRecommendation || specificFeedbackGiven) return; // Prevent logging without a selected recommendation
 
     try {
-        const response = await fetch('/log_interaction', {
+        const backendUrl = process.env.REACT_APP_BACKEND_URL?.replace(/\/+$/, "") || "http://127.0.0.1:5000";
+        const response = await fetch(`${backendUrl}/log_interaction`, { // Use backend URL
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
