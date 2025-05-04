@@ -242,13 +242,13 @@ def recommend_plan(user_input, priority="", ml_prediction_df=None):
 
     # Demographic-based recommendations (evaluated independently)
     predicted_female = predicted_black = predicted_hispanic = None
-    if (ml_prediction_df is not None and not ml_prediction_df.empty):
+    if ml_prediction_df is not None and not ml_prediction_df.empty:
         try:
-            if ("Percent Female" in ml_prediction_df.columns):
+            if "Percent Female" in ml_prediction_df.columns:
                 predicted_female = float(ml_prediction_df["Percent Female"].iloc[0])
-            if ("Percent African American" in ml_prediction_df.columns):
+            if "Percent African American" in ml_prediction_df.columns:
                 predicted_black = float(ml_prediction_df["Percent African American"].iloc[0])
-            if ("Percent Hispanic" in ml_prediction_df.columns):
+            if "Percent Hispanic" in ml_prediction_df.columns:
                 predicted_hispanic = float(ml_prediction_df["Percent Hispanic"].iloc[0])
         except Exception as e:
             print(f"Error processing demographic predictions: {e}")
@@ -262,19 +262,19 @@ def recommend_plan(user_input, priority="", ml_prediction_df=None):
         print(f"{demographic} Predicted Value: {predicted_value}, {demographic} Thresholds: {thresholds}")  # Debugging log
 
         # Ensure predicted_value and thresholds["high"] are not None
-        if (predicted_value is None or thresholds.get("high") is None or thresholds.get("low") is None):
+        if predicted_value is None or thresholds.get("high") is None or thresholds.get("low") is None:
             print(f"Skipping {demographic} recommendation due to missing predicted value or thresholds.")
             return
 
         try:
             # Ensure predicted_value is a scalar and not an array
-            if (isinstance(predicted_value, (list, np.ndarray))):
-                if (len(predicted_value) == 0):
+            if isinstance(predicted_value, (list, np.ndarray)):
+                if len(predicted_value) == 0:
                     print(f"Skipping {demographic} recommendation due to empty predicted value array.")
                     return
                 predicted_value = np.array(predicted_value).reshape(-1)[0]  # Convert to scalar if necessary
 
-            if (predicted_value > thresholds["high"]):
+            if predicted_value > thresholds["high"]:
                 print(f"{demographic} predicted value ({predicted_value}) is above the high threshold ({thresholds['high']}).")
                 item_id = get_or_create_item(plan_name, plan_description)
                 recommendations.append({
@@ -290,36 +290,39 @@ def recommend_plan(user_input, priority="", ml_prediction_df=None):
         except Exception as e:
             print(f"Unexpected error during processing for {demographic}: {e}")
 
-    # Process each demographic category
-    if (gender == "female"):
-        plan = PLANS["enhanced_womens_health"]
-        process_recommendation(
-            "Female",
-            predicted_female,
-            demographic_thresholds.get("BENE_FEML_PCT", {}),
-            plan["name"],
-            plan["description"]
-        )
+    # Process each demographic category only if ml_prediction_df is valid
+    if ml_prediction_df is not None and not ml_prediction_df.empty:
+        if gender == "female":
+            plan = PLANS["enhanced_womens_health"]
+            process_recommendation(
+                "Female",
+                predicted_female,
+                demographic_thresholds.get("BENE_FEML_PCT", {}),
+                plan["name"],
+                plan["description"]
+            )
 
-    if (ethnicity == "black"):
-        plan = PLANS["preventive_care_chronic_conditions_african_americans"]
-        process_recommendation(
-            "Black",
-            predicted_black,
-            demographic_thresholds.get("BENE_RACE_BLACK_PCT", {}),
-            plan["name"],
-            plan["description"]
-        )
+        if ethnicity == "black":
+            plan = PLANS["preventive_care_chronic_conditions_african_americans"]
+            process_recommendation(
+                "Black",
+                predicted_black,
+                demographic_thresholds.get("BENE_RACE_BLACK_PCT", {}),
+                plan["name"],
+                plan["description"]
+            )
 
-    if (ethnicity == "hispanic"):
-        plan = PLANS["culturally_relevant_healthcare_hispanics"]
-        process_recommendation(
-            "Hispanic",
-            predicted_hispanic,
-            demographic_thresholds.get("BENE_RACE_HSPNC_PCT", {}),
-            plan["name"],
-            plan["description"]
-        )
+        if ethnicity == "hispanic":
+            plan = PLANS["culturally_relevant_healthcare_hispanics"]
+            process_recommendation(
+                "Hispanic",
+                predicted_hispanic,
+                demographic_thresholds.get("BENE_RACE_HSPNC_PCT", {}),
+                plan["name"],
+                plan["description"]
+            )
+    else:
+        print("Skipping demographic-based recommendations due to invalid or missing ML predictions.")  # Debugging log
 
     # Age-based recommendations
     if (age_group == "young_adult" and not recommendations):
