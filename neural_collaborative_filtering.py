@@ -5,6 +5,7 @@ import numpy as np
 from sklearn.metrics.pairwise import cosine_similarity
 from ml_model import generate_embeddings  # Import content-based embedding generator
 import psutil  # Import psutil for memory monitoring
+import pandas as pd  # Import pandas for DataFrame handling
 import os  # Import os for process management
 
 class NeuralCollaborativeFiltering(nn.Module):
@@ -175,13 +176,17 @@ def load_ncf_model(model_path="ncf_model.pth", num_users=None, num_items=None, l
 
     return model
 
+import numpy as np
+import torch
+import psutil  # Import psutil for memory monitoring
+
 def predict_user_item_interactions(model, user_item_matrix, user_id, top_k=5, matrix_index_to_item_id=None):
     """
     Predict user-item interaction scores using the trained NCF model.
 
     Parameters:
         model (NeuralCollaborativeFiltering): Trained NCF model.
-        user_item_matrix (numpy.ndarray): User-item interaction matrix.
+        user_item_matrix (numpy.ndarray or pd.DataFrame): User-item interaction matrix.
         user_id (int): User ID for predictions.
         top_k (int): Number of top recommendations to return (default: 5).
         matrix_index_to_item_id (dict): Mapping from matrix indices to actual item IDs.
@@ -193,6 +198,14 @@ def predict_user_item_interactions(model, user_item_matrix, user_id, top_k=5, ma
     process = psutil.Process(os.getpid())
     print(f"Memory usage at start: {process.memory_info().rss / 1024 ** 2:.2f} MB")
 
+    # Ensure the user-item matrix is a NumPy array
+    if isinstance(user_item_matrix, pd.DataFrame):
+        print("Converting user-item matrix from DataFrame to NumPy array...")  # Debugging log
+        user_item_matrix = user_item_matrix.values
+
+    if not isinstance(user_item_matrix, np.ndarray):
+        raise ValueError(f"Expected user_item_matrix to be a NumPy array, but got {type(user_item_matrix)}")
+
     num_users, num_items = user_item_matrix.shape
     print(f"User-item matrix dimensions: {num_users} users, {num_items} items")  # Debugging log
 
@@ -201,10 +214,9 @@ def predict_user_item_interactions(model, user_item_matrix, user_id, top_k=5, ma
         print(f"Invalid or missing user_id: {user_id}. Skipping collaborative filtering.")  # Debugging log
         return {}  # Return an empty dictionary if user_id is invalid
 
-    # Convert user-item matrix to a sparse tensor
+    # Convert user-item matrix to a tensor
     user_item_tensor = torch.tensor(user_item_matrix, dtype=torch.float32)
-    user_item_sparse = user_item_tensor.to_sparse()
-    print(f"Converted user-item matrix to sparse tensor. Memory usage: {process.memory_info().rss / 1024 ** 2:.2f} MB")
+    print(f"Converted user-item matrix to tensor. Memory usage: {process.memory_info().rss / 1024 ** 2:.2f} MB")
 
     # Process predictions in batches
     batch_size = 1000  # Adjust batch size based on available memory
