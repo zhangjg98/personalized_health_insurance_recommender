@@ -4,6 +4,8 @@ import torch.optim as optim
 import numpy as np
 from sklearn.metrics.pairwise import cosine_similarity
 from ml_model import generate_embeddings  # Import content-based embedding generator
+import psutil  # Import psutil for memory monitoring
+import os  # Import os for process management
 
 class NeuralCollaborativeFiltering(nn.Module):
     def __init__(self, num_users, num_items, latent_dim, hidden_dim, dropout_rate=0.3, pretrained_item_embeddings=None):
@@ -188,7 +190,8 @@ def predict_user_item_interactions(model, user_item_matrix, user_id, top_k=5, ma
         dict: Item scores mapped to actual item IDs.
     """
     print("Starting predict_user_item_interactions function...")  # Debugging log
-    print(f"User ID: {user_id}, Top-K: {top_k}")  # Debugging log
+    process = psutil.Process(os.getpid())
+    print(f"Memory usage at start: {process.memory_info().rss / 1024 ** 2:.2f} MB")
 
     num_users, num_items = user_item_matrix.shape
     print(f"User-item matrix dimensions: {num_users} users, {num_items} items")  # Debugging log
@@ -198,42 +201,31 @@ def predict_user_item_interactions(model, user_item_matrix, user_id, top_k=5, ma
         print(f"Invalid or missing user_id: {user_id}. Skipping collaborative filtering.")  # Debugging log
         return {}  # Return an empty dictionary if user_id is invalid
 
-    # Validate item indices
-    if num_items < 2:  # Ensure at least 2 items for meaningful predictions
-        print("Insufficient items in the user-item matrix for predictions.")  # Debugging log
-        return {}  # Return an empty dictionary if there are not enough items
+    # Convert user-item matrix to a sparse tensor
+    user_item_tensor = torch.tensor(user_item_matrix, dtype=torch.float32)
+    user_item_sparse = user_item_tensor.to_sparse()
+    print(f"Converted user-item matrix to sparse tensor. Memory usage: {process.memory_info().rss / 1024 ** 2:.2f} MB")
 
-    # Adjust top_k to ensure it does not exceed the number of items
-    top_k = min(top_k, num_items) if top_k else num_items
+    # Process predictions in batches
+    batch_size = 1000  # Adjust batch size based on available memory
+    item_scores = {}
+    for start_idx in range(0, num_items, batch_size):
+        end_idx = min(start_idx + batch_size, num_items)
+        item_batch = torch.arange(start_idx, end_idx, dtype=torch.long)
 
-    user_tensor = torch.tensor([user_id], dtype=torch.long)
-    item_tensor = torch.arange(num_items, dtype=torch.long)
+        print(f"Processing batch {start_idx}-{end_idx}. Memory usage: {process.memory_info().rss / 1024 ** 2:.2f} MB")
 
-    try:
         with torch.no_grad():
-            predictions = model(user_tensor.repeat(len(item_tensor)), item_tensor)
-            print(f"Predictions for user_id {user_id}: {predictions}")  # Debugging log
+            predictions = model(torch.tensor([user_id] * len(item_batch), dtype=torch.long), item_batch)
+            for idx, score in zip(item_batch, predictions):
+                item_id = matrix_index_to_item_id.get(idx.item()) if matrix_index_to_item_id else idx.item()
+                item_scores[item_id] = score.item()
 
-            # Validate predictions
-            if predictions is None or predictions.numel() == 0:
-                print("No valid predictions generated.")  # Debugging log
-                return {}  # Return an empty dictionary if predictions are invalid
-
-            # Debugging log: Print the mapping
-            print("Matrix index to item ID mapping:", matrix_index_to_item_id)
-
-            # Map matrix indices to actual item IDs
-            item_scores = {}
-            for matrix_index in range(num_items):
-                item_id = matrix_index_to_item_id.get(matrix_index) if matrix_index_to_item_id else matrix_index
-                item_scores[item_id] = predictions[matrix_index].item()
-
-            # Debugging log: Print the item scores
-            print(f"Item scores for user_id {user_id}: {item_scores}")
-            return item_scores
-    except Exception as e:
-        print(f"Error during prediction: {e}")  # Debugging log
-        return {}  # Return an empty dictionary if an error occurs
+    # Sort and return top_k items
+    top_items = sorted(item_scores.items(), key=lambda x: x[1], reverse=True)[:top_k]
+    print(f"Top {top_k} items: {top_items}")
+    print(f"Memory usage at end: {process.memory_info().rss / 1024 ** 2:.2f} MB")
+    return dict(top_items)
 
 def precision_at_k(predictions, ground_truth, k):
     """
