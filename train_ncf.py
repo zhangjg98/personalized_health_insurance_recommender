@@ -5,9 +5,13 @@ from neural_collaborative_filtering import train_and_save_model, load_ncf_model
 from evaluation_metrics import evaluate_model_metrics # Import from evaluation_metrics.py
 from flask import Flask
 from plans import PLANS
+from dotenv import load_dotenv
+import requests
+
+load_dotenv()
 
 app = Flask(__name__)
-app.config['SQLALCHEMY_DATABASE_URI'] = 'postgresql://recommender_user:securepassword@localhost/health_insurance_recommender'
+app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get("DATABASE_URL")
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 db.init_app(app)
 
@@ -96,3 +100,29 @@ try:
     print(f"Hit Rate@{k_value}: {metrics['Hit Rate']:.4f}")
 except ValueError as e:
     print(f"Error during model evaluation: {e}")
+
+def upload_to_supabase(filename, bucket, supabase_url, api_key):
+    storage_url = f"{supabase_url}/storage/v1/object/{bucket}/{filename}"
+    headers = {
+        "apikey": api_key,
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/octet-stream"
+    }
+
+    with open(filename, "rb") as f:
+        response = requests.put(storage_url, headers=headers, data=f)
+        if response.status_code in [200, 201]:
+            print(f"Successfully uploaded {filename} to Supabase bucket '{bucket}'.")
+        else:
+            print(f"Failed to upload {filename}: {response.status_code}, {response.text}")
+
+# Upload files to Supabase
+SUPABASE_URL = os.getenv("SUPABASE_URL")
+SUPABASE_API_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
+BUCKET_NAME = "models"
+
+if SUPABASE_URL and SUPABASE_API_KEY:
+    upload_to_supabase("ncf_model.pth", BUCKET_NAME, SUPABASE_URL, SUPABASE_API_KEY)
+    upload_to_supabase("user_item_matrix.csv", BUCKET_NAME, SUPABASE_URL, SUPABASE_API_KEY)
+else:
+    print("Supabase credentials not set. Skipping upload.")
