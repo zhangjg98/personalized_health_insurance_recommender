@@ -73,6 +73,7 @@ def get_or_create_item(plan_name, plan_description):
 
 # Recommendation function
 def recommend_plan(user_input, priority="", ml_prediction_df=None):
+    global NCF_MODEL, USER_ITEM_MATRIX
     print("Starting recommend_plan function...")  # Debugging log
     print("User input:", user_input)  # Debugging log
     print("Priority:", priority)  # Debugging log
