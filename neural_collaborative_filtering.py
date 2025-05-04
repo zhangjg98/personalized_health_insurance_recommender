@@ -160,17 +160,18 @@ def recall_at_k_dynamic(predictions, ground_truth, k):
 def load_ncf_model(model_path="ncf_model.pth", num_users=None, num_items=None, latent_dim=50, hidden_dim=128, dropout_rate=0.3):
     """
     Load NCF model and ensure compatibility with the current matrix shape.
+    Handles both metadata-included and legacy model files.
     """
     print(f"Loading NCF model from {model_path}...")
 
     if not os.path.exists(model_path):
         raise FileNotFoundError(f"Model file {model_path} not found.")
 
-    # Temporary dummy model for loading
-    model = NeuralCollaborativeFiltering(num_users or 1, num_items or 1, latent_dim, hidden_dim, dropout_rate)
-
     data = torch.load(model_path)
-    try:
+
+    # Determine if metadata is included
+    if isinstance(data, dict) and 'model_state_dict' in data:
+        # Load full config from saved metadata
         model = NeuralCollaborativeFiltering(
             num_users=data['num_users'],
             num_items=data['num_items'],
@@ -178,14 +179,14 @@ def load_ncf_model(model_path="ncf_model.pth", num_users=None, num_items=None, l
             hidden_dim=data['hidden_dim'],
             dropout_rate=data['dropout_rate']
         )
-        model.load_state_dict(data['model_state_dict'])    
-    except RuntimeError as e:
-        print("Model dimension mismatch. Details:\n", e)
-        raise RuntimeError(
-            f"Model dimensions do not match user-item matrix. "
-            f"Expected num_users={num_users}, num_items={num_items}. "
-            f"Try retraining the model."
-        )
+        model.load_state_dict(data['model_state_dict'])
+    else:
+        # Fallback for old format: raw state_dict only
+        if num_users is None or num_items is None:
+            raise ValueError("num_users and num_items must be provided for legacy model files.")
+
+        model = NeuralCollaborativeFiltering(num_users, num_items, latent_dim, hidden_dim, dropout_rate)
+        model.load_state_dict(data)
 
     print("Model loaded successfully.")
     return model
