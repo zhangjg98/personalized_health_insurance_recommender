@@ -144,6 +144,12 @@ def recommend_plan(user_input, priority="", ml_prediction_df=None):
                 print(f"User ID {user_id} not found in the user-item matrix.")  # Debugging log
 
                 user_index = None  # Skip collaborative filtering for this user
+
+            # Ensure the user-item matrix is a NumPy array
+            if USER_ITEM_MATRIX is not None:
+                print("Converting user-item matrix to NumPy array...")  # Debugging log
+                USER_ITEM_MATRIX = USER_ITEM_MATRIX.values
+
         except Exception as e:
             print(f"Error during matrix-related logic: {e}")  # Debugging log
     else:
