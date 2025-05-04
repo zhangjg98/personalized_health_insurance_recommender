@@ -53,63 +53,53 @@ function App() {
     setSelectedFeedback(null);
     setSelectedRecommendation("");
 
-    let userId = "1"; // Default user ID
+    const userId = "1"; // Use a static user ID for all users
 
     try {
-      const { data: { user }, error: authError } = await supabase.auth.getUser();
+        const payload = { ...formData, user_id: userId };
+        localStorage.setItem("latestUserInput", JSON.stringify(payload));
 
-      if (user) {
-        userId = user.id; // Use authenticated user ID if available
-      } else {
-        // Generate a temporary user ID for unauthenticated users
-        userId = `guest_${Math.random().toString(36).substring(2, 15)}`;
-        console.log("Unauthenticated user. Generated temporary user ID:", userId);
-      }
+        const backendUrl = process.env.REACT_APP_BACKEND_URL?.replace(/\/+$/, "") || "http://127.0.0.1:5000";
+        const response = await fetch(`${backendUrl}/recommend`, {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+            },
+            body: JSON.stringify(payload),
+        });
 
-      const payload = { ...formData, user_id: userId };
-      localStorage.setItem("latestUserInput", JSON.stringify(payload));
-
-      const backendUrl = process.env.REACT_APP_BACKEND_URL?.replace(/\/+$/, "") || "http://127.0.0.1:5000";
-      const response = await fetch(`${backendUrl}/recommend`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(payload),
-      });
-
-      if (!response.ok) {
-        throw new Error(`Server error: ${response.status}`);
-      }
-
-      const data = await response.json();
-      const sortedRecommendations = (data.recommendations || []).sort((a, b) => {
-        if (a.priority === "strongly recommended" && b.priority !== "strongly recommended") {
-          return -1;
+        if (!response.ok) {
+            throw new Error(`Server error: ${response.status}`);
         }
-        if (a.priority !== "strongly recommended" && b.priority === "strongly recommended") {
-          return 1;
-        }
-        return 0;
-      });
 
-      // Filter out SHAP explanations for rule-based recommendations
-      const filteredRecommendations = sortedRecommendations.map((rec) => {
-        if (rec.priority !== "content-based" && rec.priority !== "collaborative filtering") {
-          rec.shap_explanation = null; // Remove SHAP explanation for rule-based plans
-        }
-        return rec;
-      });
+        const data = await response.json();
+        const sortedRecommendations = (data.recommendations || []).sort((a, b) => {
+            if (a.priority === "strongly recommended" && b.priority !== "strongly recommended") {
+                return -1;
+            }
+            if (a.priority !== "strongly recommended" && b.priority === "strongly recommended") {
+                return 1;
+            }
+            return 0;
+        });
 
-      setRecommendations(filteredRecommendations); // Ensure "Strongly Recommended" plans appear first
-      setMlSummary(data.ml_summary);
-      setMlData(data.ml_prediction);
-      setOutlierMessage(data.outlier_message || "");
-      setDisclaimer(data.disclaimer || ""); // Set disclaimer
+        // Filter out SHAP explanations for rule-based recommendations
+        const filteredRecommendations = sortedRecommendations.map((rec) => {
+            if (rec.priority !== "content-based" && rec.priority !== "collaborative filtering") {
+                rec.shap_explanation = null; // Remove SHAP explanation for rule-based plans
+            }
+            return rec;
+        });
+
+        setRecommendations(filteredRecommendations); // Ensure "Strongly Recommended" plans appear first
+        setMlSummary(data.ml_summary);
+        setMlData(data.ml_prediction);
+        setOutlierMessage(data.outlier_message || "");
+        setDisclaimer(data.disclaimer || ""); // Set disclaimer
     } catch (err) {
-      setError(err.message);
+        setError(err.message);
     }
-  };
+};
 
   const logPlanFeedback = async (rating) => {
     if (feedbackGiven) return; // Prevent multiple feedback submissions
