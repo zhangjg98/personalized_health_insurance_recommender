@@ -133,13 +133,50 @@ def recommend_plan(user_input, priority="", ml_prediction_df=None):
 
             # Map the actual user_id to the zero-based index in the matrix
             user_index = None  # Initialize user_index to None
-            if user_id in USER_ITEM_MATRIX.index:
-                user_index = USER_ITEM_MATRIX.index.tolist().index(user_id)
-                print(f"Mapped user_id {user_id} to user_index {user_index}.")  # Debugging log
-            else:
-                print(f"User ID {user_id} not found in the user-item matrix.")  # Debugging log
+            try:
+                user_id = int(user_input.get("user_id", -1))  # Convert user_id to int if possible
+                if user_id in USER_ITEM_MATRIX.index:
+                    user_index = USER_ITEM_MATRIX.index.tolist().index(user_id)
+                    print(f"Mapped user_id {user_id} to user_index {user_index}.")  # Debugging log
+                else:
+                    print(f"User ID {user_id} not found in the user-item matrix.")  # Debugging log
+            except (ValueError, TypeError):
+                print(f"Invalid user_id: {user_input.get('user_id')}. Skipping collaborative filtering.")  # Debugging log
 
-                user_index = None  # Skip collaborative filtering for this user
+            # Collaborative filtering logic
+            if user_index is not None:
+                try:
+                    # ...existing collaborative filtering logic...
+                    pass
+                except Exception as e:
+                    print(f"Error during collaborative filtering: {e}")
+                    user_index = None  # Reset user_index to None to trigger fallback logic
+
+            # Fallback to content-based filtering or rule-based recommendations
+            if user_index is None:
+                print("Starting fallback logic...")  # Debugging log
+                # Content-based filtering
+                plans_list = list(PLANS.values())
+                ranked_plans = content_based_filtering(user_input, plans_list)
+                recommendations = [
+                    {
+                        "plan": plan["name"],
+                        "justification": plan["description"],
+                        "priority": "content-based",
+                        "score": plan["similarity_score"],
+                        "item_id": plan["id"],
+                    }
+                    for plan in ranked_plans[:5]
+                ]
+
+            # Priority-based recommendations (if applicable)
+            if priority:
+                # ...existing priority-based logic...
+                pass
+
+            print("Generated recommendations:", recommendations)
+            return recommendations
+
         except Exception as e:
             print(f"Error during matrix-related logic: {e}")  # Debugging log
     else:
