@@ -78,6 +78,10 @@ def recommend_plan(user_input, priority="", ml_prediction_df=None):
     print("Priority:", priority)  # Debugging log
     print("ML Prediction DataFrame:\n", ml_prediction_df)  # Debugging log
 
+    # Use a static user ID for all users
+    user_id = 1
+    user_input["user_id"] = user_id
+
     # Ensure the NCF model and matrix are loaded
     load_ncf_resources()
     if (NCF_MODEL is None or USER_ITEM_MATRIX is None):
