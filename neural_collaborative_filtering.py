@@ -61,7 +61,14 @@ def train_and_save_model(user_item_matrix, latent_dim=50, hidden_dim=128, epochs
         optimizer.step()
         print(f"Epoch {epoch + 1}/{epochs}, Loss: {loss.item()}")
 
-    torch.save(model.state_dict(), model_path)
+    torch.save({
+        "model_state_dict": model.state_dict(),
+        "num_users": num_users,
+        "num_items": num_items,
+        "latent_dim": latent_dim,
+        "hidden_dim": hidden_dim,
+        "dropout_rate": dropout_rate
+    }, model_path)
     print(f"Model saved to {model_path}")
     return model
 
@@ -152,33 +159,36 @@ def recall_at_k_dynamic(predictions, ground_truth, k):
 
 def load_ncf_model(model_path="ncf_model.pth", num_users=None, num_items=None, latent_dim=50, hidden_dim=128, dropout_rate=0.3):
     """
-    Load the Neural Collaborative Filtering model from a saved checkpoint.
+    Load NCF model and ensure compatibility with the current matrix shape.
     """
-    print(f"Loading NCF model from {model_path}...")  # Debugging log
+    print(f"Loading NCF model from {model_path}...")
 
-    # Validate num_users and num_items
-    if num_users is None or num_items is None or num_users < 1 or num_items < 1:
-        print("Invalid dimensions for user-item matrix. Using placeholder dimensions.")  # Debugging log
-        num_users, num_items = 1, 7  # Placeholder dimensions
+    if not os.path.exists(model_path):
+        raise FileNotFoundError(f"Model file {model_path} not found.")
 
-    # Initialize the model with the current dimensions
-    model = NeuralCollaborativeFiltering(num_users=num_users, num_items=num_items, latent_dim=latent_dim, hidden_dim=hidden_dim, dropout_rate=dropout_rate)
+    # Temporary dummy model for loading
+    model = NeuralCollaborativeFiltering(num_users or 1, num_items or 1, latent_dim, hidden_dim, dropout_rate)
 
+    data = torch.load(model_path)
     try:
-        # Attempt to load the saved model
-        state_dict = torch.load(model_path)
-        model.load_state_dict(state_dict)
-        print("Model loaded successfully.")  # Debugging log
+        model = NeuralCollaborativeFiltering(
+            num_users=data['num_users'],
+            num_items=data['num_items'],
+            latent_dim=data['latent_dim'],
+            hidden_dim=data['hidden_dim'],
+            dropout_rate=data['dropout_rate']
+        )
+        model.load_state_dict(data['model_state_dict'])    
     except RuntimeError as e:
-        # Handle dimension mismatch errors
-        print(f"Model dimensions do not match the current user-item matrix or architecture. Retraining is required. Error: {e}")  # Debugging log
-        raise RuntimeError("Model dimensions do not match. Retrain the model.")
+        print("Model dimension mismatch. Details:\n", e)
+        raise RuntimeError(
+            f"Model dimensions do not match user-item matrix. "
+            f"Expected num_users={num_users}, num_items={num_items}. "
+            f"Try retraining the model."
+        )
 
+    print("Model loaded successfully.")
     return model
-
-import numpy as np
-import torch
-import psutil  # Import psutil for memory monitoring
 
 def predict_user_item_interactions(model, user_item_matrix, user_id, top_k=5, matrix_index_to_item_id=None):
     """
