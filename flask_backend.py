@@ -12,11 +12,11 @@ from plans import PLANS  # Import the PLANS dictionary
 from database import db, User, Item, Interaction, UserItemMatrix  # Import models from database.py
 from propositional_logic import recommend_plan
 from ml_model import predict_medicare_spending
-from thresholds import compute_dynamic_thresholds, unified_thresholds
-from neural_collaborative_filtering import load_ncf_model, predict_user_item_interactions
+from thresholds import unified_thresholds
+from neural_collaborative_filtering import load_ncf_model
 from evaluation_metrics import evaluate_model_metrics # Import from evaluation_metrics.py
-from utils import filter_irrelevant_plans
 from dotenv import load_dotenv
+import psutil  # Import psutil for memory and CPU monitoring
 
 load_dotenv()  # Load environment variables from .env file
 
@@ -154,15 +154,17 @@ def recommend():
     try:
         print("Starting /recommend endpoint.")
         print("Request Headers:", request.headers)  # Log request headers
+
+        # Log memory usage at the start of the request
+        process = psutil.Process(os.getpid())
+        print(f"Memory usage at start: {process.memory_info().rss / 1024 ** 2:.2f} MB")
+
         try:
             user_input = request.get_json()
             print("Received user input:", user_input)
         except Exception as e:
             print(f"Error parsing JSON: {e}")
             user_input = None
-
-        # Convert user_id to string
-        user_id = str(user_input.get('user_id', '1')) if user_input else '1'
 
         # Generate ML predictions and insights only if a state is provided
         ml_prediction_df = None
@@ -176,6 +178,9 @@ def recommend():
                 print(f"Error during ML prediction for state '{state}': {e}")  # Debugging log
                 return jsonify({"error": f"Error during ML prediction for state '{state}': {e}"}), 500
 
+        # Log memory usage before calling recommend_plan
+        print(f"Memory usage before recommend_plan: {process.memory_info().rss / 1024 ** 2:.2f} MB")
+
         # Pass ML predictions to the recommendation logic
         print("Calling recommend_plan with user input and ML predictions...")  # Debugging log
         try:
@@ -184,6 +189,9 @@ def recommend():
         except Exception as e:
             print(f"Error during recommend_plan execution: {e}")  # Debugging log
             return jsonify({"error": f"Error during recommend_plan execution: {e}"}), 500
+
+        # Log memory usage after recommend_plan
+        print(f"Memory usage after recommend_plan: {process.memory_info().rss / 1024 ** 2:.2f} MB")
 
         # Remove disclaimer from backend response
         recommendations = [
