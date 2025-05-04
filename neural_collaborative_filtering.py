@@ -194,9 +194,9 @@ def predict_user_item_interactions(model, user_item_matrix, user_id, top_k=5, ma
     print(f"User-item matrix dimensions: {num_users} users, {num_items} items")  # Debugging log
 
     # Validate user_id
-    if user_id < 0 or user_id >= num_users:
-        print(f"Invalid user_id: {user_id}. Valid range: [0, {num_users - 1}]")  # Debugging log
-        raise IndexError(f"User ID {user_id} is out of range. Valid range: [0, {num_users - 1}]")
+    if user_id is None or user_id < 0 or user_id >= num_users:
+        print(f"Invalid or missing user_id: {user_id}. Skipping collaborative filtering.")  # Debugging log
+        return {}  # Return an empty dictionary if user_id is invalid
 
     # Validate item indices
     if num_items < 2:  # Ensure at least 2 items for meaningful predictions
@@ -230,18 +230,6 @@ def predict_user_item_interactions(model, user_item_matrix, user_id, top_k=5, ma
 
             # Debugging log: Print the item scores
             print(f"Item scores for user_id {user_id}: {item_scores}")
-
-            # Debugging log: Print the item scores
-            print(f"Item scores for user_id {user_id}: {item_scores}")
-
-            # Debugging log: Print the item scores
-            print(f"Item scores for user_id {user_id}: {item_scores}")
-            # Find the item with index 3 and print its score
-            if 3 in item_scores:
-                print(f"Score for item with index 3: {item_scores[3]}")
-            else:
-                print("Item with index 3 not found in item_scores.")
-
             return item_scores
     except Exception as e:
         print(f"Error during prediction: {e}")  # Debugging log
