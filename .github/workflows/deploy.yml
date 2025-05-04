@@ -23,9 +23,15 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
+      # Optional: Run tests
+      - name: Run tests
+        run: |
+          pytest  # or your test command
+
       # Trigger Render deploy
       - name: Trigger Render Deploy Hook
         run: |
           curl -X POST "$RENDER_DEPLOY_HOOK"
         env:
           RENDER_DEPLOY_HOOK: ${{ secrets.RENDER_DEPLOY_HOOK }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
