@@ -7,6 +7,7 @@ from ml_model import generate_embeddings  # Import content-based embedding gener
 import psutil  # Import psutil for memory monitoring
 import pandas as pd  # Import pandas for DataFrame handling
 import os  # Import os for process management
+from train_ncf import train_and_save_model  # Import the training function
 
 class NeuralCollaborativeFiltering(nn.Module):
     def __init__(self, num_users, num_items, latent_dim, hidden_dim, dropout_rate=0.3, pretrained_item_embeddings=None):
@@ -157,15 +158,27 @@ def recall_at_k_dynamic(predictions, ground_truth, k):
     adjusted_k = min(k, len(relevant_items))  # Adjust K dynamically
     return len(recommended_items & relevant_items) / adjusted_k if adjusted_k > 0 else 0
 
-def load_ncf_model(model_path="ncf_model.pth", num_users=None, num_items=None, latent_dim=20, hidden_dim=64, dropout_rate=0.3):
+def load_ncf_model(model_path="ncf_model.pth", user_item_matrix=None, num_users=None, num_items=None, latent_dim=20, hidden_dim=64, dropout_rate=0.3):
     """
     Load NCF model and ensure compatibility with the current matrix shape.
     Handles both metadata-included and legacy model files.
+    Retrains the model if metadata does not match.
     """
     print(f"Loading NCF model from {model_path}...")
 
     if not os.path.exists(model_path):
-        raise FileNotFoundError(f"Model file {model_path} not found.")
+        print(f"Model file {model_path} not found. Retraining the model...")
+        if user_item_matrix is not None:
+            return train_and_save_model(
+                user_item_matrix=user_item_matrix,
+                latent_dim=latent_dim,
+                hidden_dim=hidden_dim,
+                dropout_rate=dropout_rate,
+                model_path=model_path
+            )
+        else:
+            print("Error: user_item_matrix is required to retrain the model.")
+            return None
 
     data = torch.load(model_path)
 
@@ -185,7 +198,18 @@ def load_ncf_model(model_path="ncf_model.pth", num_users=None, num_items=None, l
             print("Model architecture mismatch detected:")
             print(f"Saved model: num_users={saved_num_users}, num_items={saved_num_items}, latent_dim={saved_latent_dim}, hidden_dim={saved_hidden_dim}")
             print(f"Current model: num_users={num_users}, num_items={num_items}, latent_dim={latent_dim}, hidden_dim={hidden_dim}")
-            raise ValueError("Saved model dimensions do not match the current architecture. Retrain the model.")
+            print("Retraining the model with updated dimensions...")
+            if user_item_matrix is not None:
+                return train_and_save_model(
+                    user_item_matrix=user_item_matrix,
+                    latent_dim=latent_dim,
+                    hidden_dim=hidden_dim,
+                    dropout_rate=dropout_rate,
+                    model_path=model_path
+                )
+            else:
+                print("Error: user_item_matrix is required to retrain the model.")
+                return None
 
         model = NeuralCollaborativeFiltering(
             num_users=saved_num_users,
@@ -198,7 +222,8 @@ def load_ncf_model(model_path="ncf_model.pth", num_users=None, num_items=None, l
     else:
         # Fallback for old format: raw state_dict only
         if num_users is None or num_items is None:
-            raise ValueError("num_users and num_items must be provided for legacy model files.")
+            print("Error: num_users and num_items must be provided for legacy model files.")
+            return None
 
         model = NeuralCollaborativeFiltering(num_users, num_items, latent_dim, hidden_dim, dropout_rate)
         model.load_state_dict(data)
