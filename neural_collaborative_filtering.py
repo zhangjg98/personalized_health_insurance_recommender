@@ -167,6 +167,9 @@ def load_ncf_model(model_path="ncf_model.pth", user_item_matrix=None, num_users=
 
     if not os.path.exists(model_path):
         print(f"Model file {model_path} not found. Retraining the model...")
+        if isinstance(user_item_matrix, str):
+            print(f"Loading user-item matrix from file: {user_item_matrix}")
+            user_item_matrix = pd.read_csv(user_item_matrix, index_col=0).values  # Load as NumPy array
         if user_item_matrix is not None:
             return train_and_save_model(
                 user_item_matrix=user_item_matrix,
@@ -198,6 +201,9 @@ def load_ncf_model(model_path="ncf_model.pth", user_item_matrix=None, num_users=
             print(f"Saved model: num_users={saved_num_users}, num_items={saved_num_items}, latent_dim={saved_latent_dim}, hidden_dim={saved_hidden_dim}")
             print(f"Current model: num_users={num_users}, num_items={num_items}, latent_dim={latent_dim}, hidden_dim={hidden_dim}")
             print("Retraining the model with updated dimensions...")
+            if isinstance(user_item_matrix, str):
+                print(f"Loading user-item matrix from file: {user_item_matrix}")
+                user_item_matrix = pd.read_csv(user_item_matrix, index_col=0).values  # Load as NumPy array
             if user_item_matrix is not None:
                 return train_and_save_model(
                     user_item_matrix=user_item_matrix,
