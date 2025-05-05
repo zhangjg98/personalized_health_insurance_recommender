@@ -55,9 +55,11 @@ if os.path.exists(MODEL_PATH):
         saved_state = torch.load(MODEL_PATH, map_location="cpu")
         saved_user_embedding = saved_state['user_embedding.weight'].shape[0]
         saved_item_embedding = saved_state['item_embedding.weight'].shape[0]
+        saved_latent_dim = saved_state['user_embedding.weight'].shape[1]
+        expected_latent_dim = latent_dim
 
-        if saved_user_embedding != num_users or saved_item_embedding != num_items:
-            print(f"Model dimension mismatch: saved (users={saved_user_embedding}, items={saved_item_embedding}), current (users={num_users}, items={num_items})")
+        if (saved_user_embedding != num_users or saved_item_embedding != num_items or saved_latent_dim != expected_latent_dim):
+            print(f"Model dimension mismatch: saved latent_dim={saved_latent_dim}, expected latent_dim={expected_latent_dim}")
             retrain_model = True
         else:
             print("Saved model dimensions match current data. Proceeding to load model.")
