@@ -19,6 +19,7 @@ def test_collaborative_filtering():
         num_users, num_items = user_item_matrix.shape
         model = load_ncf_model(
             model_path=model_path,
+            user_item_matrix=user_item_matrix_path,
             num_users=num_users,
             num_items=num_items,
             latent_dim=20,
