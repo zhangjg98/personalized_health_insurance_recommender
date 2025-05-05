@@ -28,9 +28,9 @@ def load_ncf_resources():
             return
 
         # Download user-item matrix and model from Supabase
-        csv_path = download_file_if_needed("models", "user_item_matrix.csv")
-        model_path = download_file_if_needed("models", "ncf_model.pth")
-
+        csv_path = download_file_if_needed("user_item_matrix.csv")
+        model_path = download_file_if_needed("ncf_model.pth")
+        
         # Load user-item matrix
         USER_ITEM_MATRIX_DF = pd.read_csv(csv_path, index_col=0)
         if (USER_ITEM_MATRIX_DF.empty or
