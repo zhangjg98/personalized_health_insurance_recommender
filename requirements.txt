@@ -18,7 +18,7 @@ sentence-transformers
 matplotlib
 flask-sqlalchemy
 cryptography
-gunicorn
+waitress
 python-dotenv
 psutil
 pytest==7.1
