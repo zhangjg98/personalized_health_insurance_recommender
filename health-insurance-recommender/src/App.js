@@ -59,7 +59,7 @@ function App() {
         const payload = { ...formData, user_id: userId };
         localStorage.setItem("latestUserInput", JSON.stringify(payload));
 
-        const backendUrl = "http://127.0.0.1:5000"; // Temporarily hardcoded for local testing
+        const backendUrl = process.env.REACT_APP_BACKEND_URL?.replace(/\/+$/, "") || "http://127.0.0.1:5000";
         const response = await fetch(`${backendUrl}/recommend`, {
             method: "POST",
             headers: {
