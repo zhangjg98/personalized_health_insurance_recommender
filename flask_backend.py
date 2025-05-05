@@ -17,6 +17,7 @@ from neural_collaborative_filtering import load_ncf_model
 from evaluation_metrics import evaluate_model_metrics # Import from evaluation_metrics.py
 from dotenv import load_dotenv
 import psutil  # Import psutil for memory and CPU monitoring
+from supabase_storage import download_file_if_needed
 
 load_dotenv()  # Load environment variables from .env file
 
@@ -71,16 +72,20 @@ try:
             NCF_MODEL = None
             USER_ITEM_MATRIX = None
         else:
+            # Download user-item matrix and model from Supabase
+            user_item_matrix_path = download_file_if_needed("user_item_matrix.csv")
+            model_path = download_file_if_needed("ncf_model.pth")
+
             # Load the user-item matrix to determine dimensions
-            USER_ITEM_MATRIX = pd.read_csv("user_item_matrix.csv", index_col=0)
-            if USER_ITEM_MATRIX.empty or USER_ITEM_MATRIX.shape[0] == 1 and USER_ITEM_MATRIX.shape[1] == 1:
+            USER_ITEM_MATRIX = pd.read_csv(user_item_matrix_path, index_col=0)
+            if USER_ITEM_MATRIX.empty or (USER_ITEM_MATRIX.shape[0] == 1 and USER_ITEM_MATRIX.shape[1] == 1):
                 print("User-item matrix is not meaningful. Skipping NCF model loading.")  # Debugging log
                 NCF_MODEL = None
                 USER_ITEM_MATRIX = None
             else:
                 num_users, num_items = USER_ITEM_MATRIX.shape
                 NCF_MODEL = load_ncf_model(
-                    model_path="ncf_model.pth",
+                    model_path=model_path,
                     num_users=num_users,
                     num_items=num_items,
                     latent_dim=50,
