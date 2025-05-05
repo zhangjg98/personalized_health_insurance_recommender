@@ -192,42 +192,20 @@ def load_ncf_model(model_path="ncf_model.pth", num_users=None, num_items=None, l
     return model
 
 def predict_user_item_interactions(model, user_item_matrix, user_id, top_k=5, matrix_index_to_item_id=None):
-    """
-    Predict user-item interaction scores using the trained NCF model.
-
-    Parameters:
-        model (NeuralCollaborativeFiltering): Trained NCF model.
-        user_item_matrix (numpy.ndarray or pd.DataFrame): User-item interaction matrix.
-        user_id (int): User ID for predictions.
-        top_k (int): Number of top recommendations to return (default: 5).
-        matrix_index_to_item_id (dict): Mapping from matrix indices to actual item IDs.
-
-    Returns:
-        dict: Item scores mapped to actual item IDs.
-    """
-    print("Starting predict_user_item_interactions function...")  # Debugging log
+    print("Starting predict_user_item_interactions function...")  # Keep concise logs
     process = psutil.Process(os.getpid())
     print(f"Memory usage at start: {process.memory_info().rss / 1024 ** 2:.2f} MB")
 
-    # Ensure the user-item matrix is a NumPy array
     if isinstance(user_item_matrix, pd.DataFrame):
-        print("Converting user-item matrix from DataFrame to NumPy array...")  # Debugging log
-        user_item_matrix = user_item_matrix.values
-
-    if not isinstance(user_item_matrix, np.ndarray):
-        raise ValueError(f"Expected user_item_matrix to be a NumPy array, but got {type(user_item_matrix)}")
+        user_item_matrix = user_item_matrix.values  # Convert once
 
     num_users, num_items = user_item_matrix.shape
-    print(f"User-item matrix dimensions: {num_users} users, {num_items} items")  # Debugging log
+    print(f"User-item matrix dimensions: {num_users} users, {num_items} items")
 
     # Validate user_id
     if user_id is None or user_id < 0 or user_id >= num_users:
-        print(f"Invalid or missing user_id: {user_id}. Skipping collaborative filtering.")  # Debugging log
-        return {}  # Return an empty dictionary if user_id is invalid
-
-    # Convert user-item matrix to a tensor
-    user_item_tensor = torch.tensor(user_item_matrix, dtype=torch.float32)
-    print(f"Converted user-item matrix to tensor. Memory usage: {process.memory_info().rss / 1024 ** 2:.2f} MB")
+        print(f"Invalid or missing user_id: {user_id}. Skipping collaborative filtering.")
+        return {}
 
     # Process predictions in batches
     batch_size = 1000  # Adjust batch size based on available memory
@@ -235,8 +213,6 @@ def predict_user_item_interactions(model, user_item_matrix, user_id, top_k=5, ma
     for start_idx in range(0, num_items, batch_size):
         end_idx = min(start_idx + batch_size, num_items)
         item_batch = torch.arange(start_idx, end_idx, dtype=torch.long)
-
-        print(f"Processing batch {start_idx}-{end_idx}. Memory usage: {process.memory_info().rss / 1024 ** 2:.2f} MB")
 
         with torch.no_grad():
             predictions = model(torch.tensor([user_id] * len(item_batch), dtype=torch.long), item_batch)
@@ -246,8 +222,7 @@ def predict_user_item_interactions(model, user_item_matrix, user_id, top_k=5, ma
 
     # Sort and return top_k items
     top_items = sorted(item_scores.items(), key=lambda x: x[1], reverse=True)[:top_k]
-    print(f"Top {top_k} items: {top_items}")
-    print(f"Memory usage at end: {process.memory_info().rss / 1024 ** 2:.2f} MB")
+    print(f"Top {top_k} items retrieved.")
     return dict(top_items)
 
 def precision_at_k(predictions, ground_truth, k):
