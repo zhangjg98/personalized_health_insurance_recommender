@@ -4,6 +4,7 @@ from sqlalchemy.sql import text
 from cryptography.fernet import Fernet
 import os
 from sqlalchemy.exc import OperationalError, InvalidRequestError
+import base64
 
 db = SQLAlchemy()
 
@@ -49,23 +50,14 @@ class Interaction(db.Model):
     item_id = db.Column(db.Integer, db.ForeignKey('items.id'))
     rating = db.Column(db.Float)
     timestamp = db.Column(db.DateTime, default=db.func.current_timestamp())
-    user_inputs = db.Column(db.LargeBinary)  # Store encrypted data as binary
+    user_inputs = db.Column(db.Text)  # Store encrypted data as text
 
     def set_user_inputs(self, inputs):
         """Encrypt and store user inputs."""
-        try:
-            if not isinstance(inputs, str):
-                raise ValueError("user_inputs must be a string before encryption.")
-            self.user_inputs = cipher.encrypt(inputs.encode('utf-8'))
-        except Exception as e:
-            raise
-
-    def get_user_inputs(self):
-        """Decrypt and retrieve user inputs."""
-        try:
-            return cipher.decrypt(self.user_inputs).decode('utf-8')
-        except Exception as e:
-            raise
+        if not isinstance(inputs, str):
+            raise ValueError("user_inputs must be a string before encryption.")
+        encrypted_bytes = cipher.encrypt(inputs.encode('utf-8'))
+        self.user_inputs = base64.b64encode(encrypted_bytes)  # Store as base64 bytes
 
 class UserItemMatrix(db.Model):
     __tablename__ = 'user_item_matrix'
@@ -96,10 +88,25 @@ def clear_database():
             print(f"Error clearing database: {e}")
 
 def verify_encryption(encrypted_data):
-    """Decrypt and verify the encrypted user_inputs."""
+    """
+    Decrypt user_inputs, whether it's a raw Fernet binary,
+    a base64-encoded string, or a Buffer format.
+    """
     try:
-        return cipher.decrypt(encrypted_data).decode('utf-8')
+        if isinstance(encrypted_data, dict) and encrypted_data.get("type") == "Buffer":
+            # Legacy format: convert list of ints to bytes
+            encrypted_data = bytes(encrypted_data["data"])
+        elif isinstance(encrypted_data, str):
+            # Base64-encoded string
+            encrypted_data = base64.b64decode(encrypted_data)
+        elif not isinstance(encrypted_data, (bytes, bytearray)):
+            raise TypeError("Unsupported data format for encryption")
+
+        # Decrypt using Fernet
+        return cipher.decrypt(encrypted_data).decode("utf-8")
+
     except Exception as e:
+        print(f"Decryption failed: {e}")
         return None
 
 def rollback_transaction():
