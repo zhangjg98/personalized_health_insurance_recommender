@@ -8,7 +8,7 @@ function MetricsDashboard() {
   useEffect(() => {
     const fetchMetrics = async () => {
       try {
-        const response = await fetch("/metrics");
+        const response = await fetch(`${process.env.REACT_APP_BACKEND_URL}/metrics`);
         if (!response.ok) {
           throw new Error(`Server error: ${response.status}`);
         }
