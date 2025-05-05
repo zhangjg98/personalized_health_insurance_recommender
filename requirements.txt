@@ -22,3 +22,4 @@ gunicorn
 python-dotenv
 psutil
 pytest==7.1
+supabase
