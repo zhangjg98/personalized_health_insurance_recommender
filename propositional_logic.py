@@ -88,9 +88,14 @@ def get_or_create_item(plan_name, plan_description):
 def recommend_plan(user_input, priority="", ml_prediction_df=None):
     global NCF_MODEL, USER_ITEM_MATRIX, USER_ITEM_MATRIX_DF
     print("Starting recommend_plan function...")  # Debugging log
-    print("User input:", user_input)  # Debugging log
-    print("Priority:", priority)  # Debugging log
-    print("ML Prediction DataFrame:\n", ml_prediction_df)  # Debugging log
+    print(f"User input: {user_input}")  # Debugging log
+    print(f"Priority: {priority}")  # Debugging log
+
+    # Avoid printing large DataFrames or objects
+    if ml_prediction_df is not None:
+        print("ML Prediction DataFrame is available.")
+    else:
+        print("ML Prediction DataFrame is None.")
 
     # Use a static user ID for all users
     user_id = 1
@@ -578,9 +583,6 @@ def recommend_plan(user_input, priority="", ml_prediction_df=None):
         valid_item_ids = set(USER_ITEM_MATRIX_DF.columns)
         filtered_plans = [plan for plan in filtered_plans if (plan["id"] in valid_item_ids)]
 
-        # Debugging log: Check valid plans after filtering against the user-item matrix
-        print("Valid plans after filtering against the user-item matrix:", filtered_plans)
-
         # Step 2.2: Log warnings for plans with no interactions but do not exclude them
         plans_with_no_interactions = [plan for plan in filtered_plans if (plan["id"] not in interaction_item_ids)]
         if (plans_with_no_interactions):
@@ -588,9 +590,6 @@ def recommend_plan(user_input, priority="", ml_prediction_df=None):
 
         # Ensure all plans in the matrix are considered valid, even if they have no interactions
         filtered_plans = [plan for plan in filtered_plans if (plan["id"] in valid_item_ids)]
-
-        # Debugging log: Final filtered plans
-        print("Final filtered plans after relaxing interaction-based validation:", filtered_plans)
 
         # Step 2.2: Perform content-based filtering
         if (not filtered_plans):
@@ -631,9 +630,6 @@ def recommend_plan(user_input, priority="", ml_prediction_df=None):
                         "priority": "content-based",
                         "disclaimer_note": "These plans are generated using advanced filtering techniques to provide additional insights."
                     })
-
-        # Debugging log: Check recommendations after limiting content-based filtering
-        print("Recommendations after limiting content-based filtering:", recommendations)
 
         # Step 3: Rank filtered plans using collaborative filtering
         def rank_with_collaborative_filtering(recommendations, user_index):
@@ -676,9 +672,6 @@ def recommend_plan(user_input, priority="", ml_prediction_df=None):
 
         recommendations = rank_with_collaborative_filtering(recommendations, user_index)
 
-        # Debugging log: Check recommendations after collaborative filtering
-        print("Recommendations after collaborative filtering:", recommendations)
-
     # Filter recommendations to include only items present in the matrix for collaborative/content-based filtering
     if USER_ITEM_MATRIX_DF is not None:  # Use USER_ITEM_MATRIX_DF for metadata
         valid_item_ids = set(USER_ITEM_MATRIX_DF.columns)
@@ -696,9 +689,6 @@ def recommend_plan(user_input, priority="", ml_prediction_df=None):
     else:
         print("USER_ITEM_MATRIX_DF is None. Skipping filtering based on matrix.")  # Debugging log
         filtered_recommendations = recommendations
-
-    # Debugging log: Check filtered recommendations
-    print("Filtered recommendations:", filtered_recommendations)
 
     # Limit the number of recommendations displayed to the user
     MAX_RECOMMENDATIONS = 3
@@ -753,9 +743,6 @@ def recommend_plan(user_input, priority="", ml_prediction_df=None):
         except Exception as e:
             print(f"Error serializing recommendation: {rec}, Error: {e}")  # Debugging log
             rec["explanation"] = "Error serializing explanation."
-
-    # Debugging log: Check recommendations after serialization
-    print("Recommendations after serialization:", final_recommendations)
 
     # Debugging log: Check recommendations before returning
     print("Final recommendations before returning:", final_recommendations)
