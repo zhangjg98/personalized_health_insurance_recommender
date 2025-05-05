@@ -44,8 +44,8 @@ user_item_matrix = user_item_matrix.values
 num_users, num_items = user_item_matrix.shape
 
 MODEL_PATH = "ncf_model.pth"
-latent_dim = 50
-hidden_dim = 128
+latent_dim = 20
+hidden_dim = 64
 
 retrain_model = False
 
@@ -74,7 +74,7 @@ if retrain_model:
         user_item_matrix,
         latent_dim=latent_dim,
         hidden_dim=hidden_dim,
-        epochs=20,
+        epochs=10,
         lr=0.001,
         model_path=MODEL_PATH
     )
