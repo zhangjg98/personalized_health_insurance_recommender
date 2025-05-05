@@ -349,7 +349,6 @@ def recommend():
                         record[key] = float(value)
                     elif isinstance(value, (np.int32, np.int64)):
                         record[key] = int(value)
-            print("Recommendations and insights after ensuring JSON compatibility:", recommendations, ml_output_json)  # Debugging log
         except Exception as e:
             print(f"Error ensuring JSON serialization compatibility: {e}")  # Debugging log
             return jsonify({"error": f"Error ensuring JSON serialization compatibility: {e}"}), 500
