@@ -157,7 +157,7 @@ def recall_at_k_dynamic(predictions, ground_truth, k):
     adjusted_k = min(k, len(relevant_items))  # Adjust K dynamically
     return len(recommended_items & relevant_items) / adjusted_k if adjusted_k > 0 else 0
 
-def load_ncf_model(model_path="ncf_model.pth", num_users=None, num_items=None, latent_dim=50, hidden_dim=128, dropout_rate=0.3):
+def load_ncf_model(model_path="ncf_model.pth", num_users=None, num_items=None, latent_dim=20, hidden_dim=64, dropout_rate=0.3):
     """
     Load NCF model and ensure compatibility with the current matrix shape.
     Handles both metadata-included and legacy model files.
@@ -172,12 +172,27 @@ def load_ncf_model(model_path="ncf_model.pth", num_users=None, num_items=None, l
     # Determine if metadata is included
     if isinstance(data, dict) and 'model_state_dict' in data:
         # Load full config from saved metadata
+        saved_num_users = data['num_users']
+        saved_num_items = data['num_items']
+        saved_latent_dim = data['latent_dim']
+        saved_hidden_dim = data['hidden_dim']
+
+        # Check for dimension mismatches
+        if (saved_num_users != num_users or
+            saved_num_items != num_items or
+            saved_latent_dim != latent_dim or
+            saved_hidden_dim != hidden_dim):
+            print("Model architecture mismatch detected:")
+            print(f"Saved model: num_users={saved_num_users}, num_items={saved_num_items}, latent_dim={saved_latent_dim}, hidden_dim={saved_hidden_dim}")
+            print(f"Current model: num_users={num_users}, num_items={num_items}, latent_dim={latent_dim}, hidden_dim={hidden_dim}")
+            raise ValueError("Saved model dimensions do not match the current architecture. Retrain the model.")
+
         model = NeuralCollaborativeFiltering(
-            num_users=data['num_users'],
-            num_items=data['num_items'],
-            latent_dim=data['latent_dim'],
-            hidden_dim=data['hidden_dim'],
-            dropout_rate=data['dropout_rate']
+            num_users=saved_num_users,
+            num_items=saved_num_items,
+            latent_dim=saved_latent_dim,
+            hidden_dim=saved_hidden_dim,
+            dropout_rate=dropout_rate
         )
         model.load_state_dict(data['model_state_dict'])
     else:
