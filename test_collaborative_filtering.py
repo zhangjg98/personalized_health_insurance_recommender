@@ -1,42 +1,46 @@
 from flask_backend import app
 from neural_collaborative_filtering import load_ncf_model, predict_user_item_interactions
+from supabase_storage import download_file_if_needed
 import pandas as pd
 
 def test_collaborative_filtering():
     with app.app_context():  # Ensure Flask application context is active
-        # Load the trained model
-        try:
-            model = load_ncf_model(model_path="ncf_model.pth", num_users=1, num_items=11)
-            assert model is not None, "Failed to load NCF model."
-        except RuntimeError as e:
-            print(f"Error during model loading: {e}")
-            assert False, "Model loading failed due to dimension mismatch."
+        # Download necessary files
+        user_item_matrix_path = download_file_if_needed("user_item_matrix.csv")
+        model_path = download_file_if_needed("ncf_model.pth")
 
-        # Load the correct user-item matrix
-        user_item_matrix = pd.read_csv("user_item_matrix.csv", index_col=0)
+        # Load the user-item matrix
+        print(f"Loading user-item matrix from {user_item_matrix_path}...")
+        user_item_matrix = pd.read_csv(user_item_matrix_path, index_col=0)
+        print(f"User-item matrix loaded successfully with shape: {user_item_matrix.shape}")
 
-        # Map the actual user_id to the zero-based index in the matrix
-        actual_user_id = 1  # The user_id from the database
-        user_index = user_item_matrix.index.tolist().index(actual_user_id)  # Map to zero-based index
+        # Load the NCF model
+        print(f"Loading NCF model from {model_path}...")
+        num_users, num_items = user_item_matrix.shape
+        model = load_ncf_model(
+            model_path=model_path,
+            num_users=num_users,
+            num_items=num_items,
+            latent_dim=20,
+            hidden_dim=64,
+            dropout_rate=0.3
+        )
+        print("NCF model loaded successfully.")
 
-        # Dynamically adjust top_k based on the number of items in the matrix
-        num_items = user_item_matrix.shape[1]
-        top_k = min(5, num_items)  # Ensure top_k does not exceed the number of items
+        # Test predictions for a specific user
+        user_id = 0  # Test with the first user
+        top_k = 5
+        matrix_index_to_item_id = {i: item_id for i, item_id in enumerate(user_item_matrix.columns)}
 
-        # Check if the user_index exists in the matrix
-        if user_index < 0 or user_index >= user_item_matrix.shape[0]:
-            print(f"User ID {actual_user_id} (index {user_index}) not found in the user-item matrix.")
-            print(f"Available user IDs: {user_item_matrix.index.tolist()}")
-            return
-
-        recommendations = predict_user_item_interactions(model, user_item_matrix, user_index, top_k=top_k)
-
-        if recommendations:
-            print(f"Top {top_k} recommendations for user {actual_user_id}:")
-            for rec in recommendations:
-                print(rec)
-        else:
-            print(f"No recommendations available for user {actual_user_id}.")
+        print(f"Generating top-{top_k} recommendations for user_id={user_id}...")
+        recommendations = predict_user_item_interactions(
+            model=model,
+            user_item_matrix=user_item_matrix.values,
+            user_id=user_id,
+            top_k=top_k,
+            matrix_index_to_item_id=matrix_index_to_item_id
+        )
+        print(f"Recommendations for user_id={user_id}: {recommendations}")
 
 if __name__ == "__main__":
     test_collaborative_filtering()
