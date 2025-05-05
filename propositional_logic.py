@@ -575,7 +575,6 @@ def recommend_plan(user_input, priority="", ml_prediction_df=None):
         # Step 2: Perform content-based filtering with hard constraints
 
         # Step 2.1: Validate plans against the user-item matrix
-        USER_ITEM_MATRIX_DF = pd.read_csv("user_item_matrix.csv", index_col=0)
         valid_item_ids = set(USER_ITEM_MATRIX_DF.columns)
         filtered_plans = [plan for plan in filtered_plans if (plan["id"] in valid_item_ids)]
 
@@ -638,31 +637,34 @@ def recommend_plan(user_input, priority="", ml_prediction_df=None):
 
         # Step 3: Rank filtered plans using collaborative filtering
         def rank_with_collaborative_filtering(recommendations, user_index):
-            if (USER_ITEM_MATRIX is None):
+            if USER_ITEM_MATRIX is None:
                 print("USER_ITEM_MATRIX is None. Skipping collaborative filtering.")  # Debugging log
                 return recommendations
             try:
-                if (USER_ITEM_MATRIX.shape[1] < 2):
+                if USER_ITEM_MATRIX.shape[1] < 2:
                     raise ValueError("Insufficient items in the user-item matrix for collaborative filtering.")
+
+                # Ensure top_k is an integer
+                top_k = int(USER_ITEM_MATRIX.shape[1] // 2)
 
                 predicted_scores = predict_user_item_interactions(
                     NCF_MODEL,
                     USER_ITEM_MATRIX,
                     user_index,
-                    top_k=None,
+                    top_k=top_k,
                     matrix_index_to_item_id=matrix_index_to_item_id  # Pass the corrected mapping
                 )
 
                 for rec in recommendations:
                     item_id = rec.get("item_id")
-                    if (item_id not in predicted_scores):
+                    if item_id not in predicted_scores:
                         print(f"Warning: item_id {item_id} is not in the predicted scores. Skipping.")
                         rec["score"] = 0
                         continue
 
                     rec["score"] = predicted_scores[item_id]
                     # Ensure only one disclaimer is added
-                    if ("disclaimer_note" not in rec):
+                    if "disclaimer_note" not in rec:
                         rec["disclaimer_note"] = "These plans are generated using advanced filtering techniques to provide additional insights."
 
                 recommendations.sort(key=lambda x: x["score"], reverse=True)
@@ -678,13 +680,13 @@ def recommend_plan(user_input, priority="", ml_prediction_df=None):
         print("Recommendations after collaborative filtering:", recommendations)
 
     # Filter recommendations to include only items present in the matrix for collaborative/content-based filtering
-    if (USER_ITEM_MATRIX is not None):
+    if USER_ITEM_MATRIX_DF is not None:  # Use USER_ITEM_MATRIX_DF for metadata
         valid_item_ids = set(USER_ITEM_MATRIX_DF.columns)
         filtered_recommendations = []
         for rec in recommendations:
-            if (rec.get("priority") in ["content-based", "collaborative filtering"]):
+            if rec.get("priority") in ["content-based", "collaborative filtering"]:
                 # Only filter collaborative/content-based recommendations
-                if (rec.get("item_id") in valid_item_ids):
+                if rec.get("item_id") in valid_item_ids:
                     filtered_recommendations.append(rec)
                 else:
                     print(f"Skipping recommendation for item_id {rec.get('item_id')} as it is not in the user-item matrix.")
@@ -692,7 +694,7 @@ def recommend_plan(user_input, priority="", ml_prediction_df=None):
                 # Include rule-based recommendations without filtering
                 filtered_recommendations.append(rec)
     else:
-        print("USER_ITEM_MATRIX is None. Skipping filtering based on matrix.")  # Debugging log
+        print("USER_ITEM_MATRIX_DF is None. Skipping filtering based on matrix.")  # Debugging log
         filtered_recommendations = recommendations
 
     # Debugging log: Check filtered recommendations
