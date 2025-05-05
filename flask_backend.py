@@ -83,6 +83,7 @@ try:
                 num_users, num_items = USER_ITEM_MATRIX.shape
                 NCF_MODEL = load_ncf_model(
                     model_path=model_path,
+                    user_item_matrix=user_item_matrix_path,
                     num_users=num_users,
                     num_items=num_items,
                     latent_dim=50,
