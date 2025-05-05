@@ -7,6 +7,7 @@ from ml_model import content_based_filtering  # Use trained data for thresholds
 from neural_collaborative_filtering import predict_user_item_interactions, load_ncf_model
 from plans import PLANS  # Import plans from plans dictionary
 from utils import filter_irrelevant_plans  # Import the filtering function
+from supabase_storage import download_file_if_needed
 
 # Description: This file contains the propositional logic for the insurance recommender system.
 
@@ -26,8 +27,12 @@ def load_ncf_resources():
             USER_ITEM_MATRIX = None
             return
 
-        # Load the user-item matrix
-        USER_ITEM_MATRIX_DF = pd.read_csv("user_item_matrix.csv", index_col=0)
+        # Download user-item matrix and model from Supabase
+        csv_path = download_file_if_needed("models/user_item_matrix.csv")
+        model_path = download_file_if_needed("models/ncf_model.pth")
+
+        # Load user-item matrix
+        USER_ITEM_MATRIX_DF = pd.read_csv(csv_path, index_col=0)
         if (USER_ITEM_MATRIX_DF.empty or
             (USER_ITEM_MATRIX_DF.shape[0] == 1 and USER_ITEM_MATRIX_DF.shape[1] == 1)):
             print("User-item matrix is not meaningful. Skipping NCF model loading.")
@@ -45,7 +50,7 @@ def load_ncf_resources():
         # Load the NCF model
         num_users, num_items = USER_ITEM_MATRIX.shape
         NCF_MODEL = load_ncf_model(
-            model_path="ncf_model.pth",
+            model_path=model_path,
             num_users=num_users,
             num_items=num_items,
             latent_dim=50,
@@ -571,7 +576,7 @@ def recommend_plan(user_input, priority="", ml_prediction_df=None):
 
         # Step 2.1: Validate plans against the user-item matrix
         USER_ITEM_MATRIX_DF = pd.read_csv("user_item_matrix.csv", index_col=0)
-        valid_item_ids = set(USER_ITEM_MATRIX.columns)
+        valid_item_ids = set(USER_ITEM_MATRIX_DF.columns)
         filtered_plans = [plan for plan in filtered_plans if (plan["id"] in valid_item_ids)]
 
         # Debugging log: Check valid plans after filtering against the user-item matrix
