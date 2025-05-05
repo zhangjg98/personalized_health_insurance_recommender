@@ -22,12 +22,9 @@ from supabase_storage import download_file_if_needed
 load_dotenv()  # Load environment variables from .env file
 
 app = Flask(__name__)
-CORS(app, origins=["https://zhangjg98.github.io"], methods=["GET", "POST", "OPTIONS"])
+CORS(app, origins=["http://localhost:3000", "https://zhangjg98.github.io"], methods=["GET", "POST", "OPTIONS"], allow_headers=["Content-Type"])
 
 print("Flask app initialized.")  # Debugging log
-
-# Add this line to disable CSRF protection for testing
-app.config['WTF_CSRF_ENABLED'] = False
 
 # Configure PostgreSQL database
 app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL')  # Set the database URI from the environment variable
