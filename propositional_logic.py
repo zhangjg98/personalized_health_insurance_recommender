@@ -574,11 +574,6 @@ def recommend_plan(user_input, priority="", ml_prediction_df=None):
         plans = [{"id": item.id, "name": item.name, "description": item.description} for item in Item.query.all()]
         filtered_plans = filter_irrelevant_plans(plans, user_input)
 
-        # Debugging log: Check filtered plans
-        print("Filtered plans:", filtered_plans)
-
-        # Step 2: Perform content-based filtering with hard constraints
-
         # Step 2.1: Validate plans against the user-item matrix
         valid_item_ids = set(USER_ITEM_MATRIX_DF.columns)
         filtered_plans = [plan for plan in filtered_plans if (plan["id"] in valid_item_ids)]
@@ -591,7 +586,7 @@ def recommend_plan(user_input, priority="", ml_prediction_df=None):
         # Ensure all plans in the matrix are considered valid, even if they have no interactions
         filtered_plans = [plan for plan in filtered_plans if (plan["id"] in valid_item_ids)]
 
-        # Step 2.2: Perform content-based filtering
+        # Step 2.3: Perform content-based filtering
         if (not filtered_plans):
             print("No valid plans found after filtering against the user-item matrix.")  # Debugging log
         else:
