@@ -13,11 +13,13 @@ from database import db, User, Item, Interaction  # Import models from database.
 from propositional_logic import recommend_plan
 from ml_model import predict_medicare_spending
 from thresholds import unified_thresholds
-from neural_collaborative_filtering import load_ncf_model
+from model_loader import load_ncf_model  # Import from model_loader
 from evaluation_metrics import evaluate_model_metrics # Import from evaluation_metrics.py
 from dotenv import load_dotenv
 import psutil  # Import psutil for memory and CPU monitoring
 from supabase_storage import download_file_if_needed
+from functools import lru_cache
+from resource_manager import get_user_item_matrix, get_ncf_model  # Use resource manager for shared resources
 
 load_dotenv()  # Load environment variables from .env file
 
@@ -59,45 +61,41 @@ keys_for_thresholds = [
 ]
 dynamic_thresholds = unified_thresholds("processed_user_item_matrix.csv", keys_for_thresholds)
 
-# Load the NeuralCollaborativeFiltering model and user-item matrix
-try:
-    # Check if there are any interactions in the database
-    with app.app_context():
-        interaction_count = db.session.query(Interaction).count()
-        if interaction_count == 0:
-            print("No interactions found in the database. Skipping NCF model loading.")  # Debugging log
-            NCF_MODEL = None
-            USER_ITEM_MATRIX = None
-        else:
-            # Download user-item matrix and model from Supabase
-            user_item_matrix_path = download_file_if_needed("user_item_matrix.csv")
-            model_path = download_file_if_needed("ncf_model.pth")
+@lru_cache()
+def load_user_item_matrix_once():
+    """
+    Load the user-item matrix from Supabase or a cached file.
+    """
+    print("Loading user-item matrix...")
+    user_item_matrix_path = download_file_if_needed("user_item_matrix.csv")
+    user_item_matrix = pd.read_csv(user_item_matrix_path, index_col=0)
+    print(f"User-item matrix loaded with shape: {user_item_matrix.shape}")
+    return user_item_matrix
 
-            # Load the user-item matrix to determine dimensions
-            USER_ITEM_MATRIX = pd.read_csv(user_item_matrix_path, index_col=0)
-            if USER_ITEM_MATRIX.empty or (USER_ITEM_MATRIX.shape[0] == 1 and USER_ITEM_MATRIX.shape[1] == 1):
-                print("User-item matrix is not meaningful. Skipping NCF model loading.")  # Debugging log
-                NCF_MODEL = None
-                USER_ITEM_MATRIX = None
-            else:
-                num_users, num_items = USER_ITEM_MATRIX.shape
-                NCF_MODEL = load_ncf_model(
-                    model_path=model_path,
-                    user_item_matrix=user_item_matrix_path,
-                    num_users=num_users,
-                    num_items=num_items,
-                    latent_dim=20,
-                    hidden_dim=64
-                )
-                print("NCF model and user-item matrix loaded successfully.")  # Debugging log
-except FileNotFoundError:
-    print("The user_item_matrix.csv file was not found. Skipping NCF model loading.")  # Debugging log
-    NCF_MODEL = None
-    USER_ITEM_MATRIX = None
-except ValueError as e:
-    print(f"Error loading NCF model: {e}. Skipping NCF model loading.")  # Debugging log
-    NCF_MODEL = None
-    USER_ITEM_MATRIX = None
+@lru_cache()
+def load_model_once():
+    """
+    Load the NCF model from Supabase or a cached file.
+    """
+    print("Loading NCF model...")
+    model_path = download_file_if_needed("ncf_model.pth")
+    user_item_matrix = load_user_item_matrix_once()
+    num_users, num_items = user_item_matrix.shape
+
+    model = load_ncf_model(
+        model_path=model_path,
+        user_item_matrix=user_item_matrix,
+        num_users=num_users,
+        num_items=num_items,
+        latent_dim=20,
+        hidden_dim=64
+    )
+    print("NCF model loaded successfully.")
+    return model
+
+# Cache the model and matrix at the module level
+USER_ITEM_MATRIX = get_user_item_matrix()
+NCF_MODEL = get_ncf_model()
 
 @app.before_request
 def log_request_info():
