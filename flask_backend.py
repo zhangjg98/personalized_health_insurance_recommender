@@ -9,7 +9,7 @@ import multiprocessing
 import atexit
 import warnings
 from plans import PLANS  # Import the PLANS dictionary
-from database import db, User, Item, Interaction, UserItemMatrix  # Import models from database.py
+from database import db, User, Item, Interaction  # Import models from database.py
 from propositional_logic import recommend_plan
 from ml_model import predict_medicare_spending
 from thresholds import unified_thresholds
@@ -86,8 +86,8 @@ try:
                     user_item_matrix=user_item_matrix_path,
                     num_users=num_users,
                     num_items=num_items,
-                    latent_dim=50,
-                    hidden_dim=128
+                    latent_dim=20,
+                    hidden_dim=64
                 )
                 print("NCF model and user-item matrix loaded successfully.")  # Debugging log
 except FileNotFoundError:
@@ -132,25 +132,6 @@ def classify_value(value, thresholds):
     elif abs(value - mid) <= (high - low) * 0.25:
         return "Moderate"
     return "Low" if value < mid else "High"
-
-def compute_composite_ml_score(spending, risk, er_rate, thresholds):
-    """
-    Compute a composite score using normalized distances from the threshold midpoints.
-    The score is an average of the normalized distances (between 0 and 1).
-    """
-    scores = {}
-    for key, value in zip(["TOT_MDCR_STDZD_PYMT_PC", "BENE_AVG_RISK_SCRE", "ER_VISITS_PER_1000_BENES"],
-                           [spending, risk, er_rate]):
-        thresh = thresholds[key]
-        midpoint = (thresh["low"] + thresh["high"]) / 2.0
-        # Compute absolute distance normalized by the range
-        norm_distance = abs(value - midpoint) / (thresh["high"] - thresh["low"])
-        # Clip between 0 and 1 for safety
-        norm_distance = np.clip(norm_distance, 0, 1)
-        scores[key] = norm_distance
-    # Composite score is the average of these distances.
-    composite_score = np.mean(list(scores.values()))
-    return composite_score, scores
 
 @app.route('/recommend', methods=['POST'])
 def recommend():
@@ -242,21 +223,6 @@ def recommend():
             for metric, comparison in comparisons.items():
                 ml_output_json[0][f"{metric} Comparison"] = comparison
 
-            # Add clarification message with percentage thresholds
-            clarification_message = (
-                "The classification (e.g., 'Moderate') is based on thresholds derived from state-level data, "
-                "specifically the 10th to 90th percentiles. Values within this range are classified as 'Moderate'. "
-                "The comparison (e.g., 'above the national average') is relative to the national average, "
-                "calculated as the mean of all state values."
-            )
-
-            # Add clarification message for predicted values
-            prediction_context_message = (
-                "The values shown in 'Predicted Medicare Spending Details' are predictions based on historical data "
-                "and trained machine learning models. These predictions aim to provide insights into state-level trends "
-                "and are not exact measurements."
-            )
-
             # Build summary messages based on ML predictions
             spending = ml_prediction_df["Standardized Medicare Payment per Capita"].iloc[0]
             risk = ml_prediction_df["Average Health Risk Score"].iloc[0]
@@ -265,15 +231,6 @@ def recommend():
             spending_classification = classify_value(spending, dynamic_thresholds["TOT_MDCR_STDZD_PYMT_PC"])
             risk_classification = classify_value(risk, dynamic_thresholds["BENE_AVG_RISK_SCRE"])
             er_rate_classification = classify_value(er_rate, dynamic_thresholds["ER_VISITS_PER_1000_BENES"])
-
-            # Compute Composite ML Score
-            composite_score, _ = compute_composite_ml_score(
-                spending, risk, er_rate, {
-                    "TOT_MDCR_STDZD_PYMT_PC": dynamic_thresholds["TOT_MDCR_STDZD_PYMT_PC"],
-                    "BENE_AVG_RISK_SCRE": dynamic_thresholds["BENE_AVG_RISK_SCRE"],
-                    "ER_VISITS_PER_1000_BENES": dynamic_thresholds["ER_VISITS_PER_1000_BENES"],
-                }
-            )
 
             # Build dynamic summary messages based on classifications
             messages = []
