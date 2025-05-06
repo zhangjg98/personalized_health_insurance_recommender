@@ -40,3 +40,28 @@ class DeepAutoencoder(nn.Module):
         encoded = self.encoder(x)
         decoded = self.decoder(encoded)
         return decoded
+
+class NeuralCollaborativeFiltering(nn.Module):
+    def __init__(self, num_users, num_items, latent_dim, hidden_dim, dropout_rate=0.3, pretrained_item_embeddings=None):
+        super(NeuralCollaborativeFiltering, self).__init__()
+        self.user_embedding = nn.Embedding(num_users, latent_dim)
+        self.item_embedding = nn.Embedding(num_items, latent_dim)
+
+        # Initialize item embeddings with pretrained embeddings if provided
+        if pretrained_item_embeddings is not None:
+            self.item_embedding.weight.data.copy_(torch.tensor(pretrained_item_embeddings, dtype=torch.float32))
+
+        self.fc_layers = nn.Sequential(
+            nn.Linear(latent_dim * 2, hidden_dim),
+            nn.BatchNorm1d(hidden_dim),
+            nn.ReLU(),
+            nn.Dropout(dropout_rate),
+            nn.Linear(hidden_dim, 1)
+        )
+        self.sigmoid = nn.Sigmoid()
+
+    def forward(self, user, item):
+        user_emb = self.user_embedding(user)
+        item_emb = self.item_embedding(item)
+        x = torch.cat([user_emb, item_emb], dim=1)
+        return self.sigmoid(self.fc_layers(x)).squeeze()
