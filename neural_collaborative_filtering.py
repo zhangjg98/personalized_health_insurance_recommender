@@ -105,8 +105,10 @@ def predict_user_item_interactions(model=None, user_item_matrix=None, user_id=No
     print("Starting predict_user_item_interactions function...")  # Debugging log
 
     # Use the globally cached USER_ITEM_MATRIX and NCF_MODEL if not provided
-    user_item_matrix = user_item_matrix or USER_ITEM_MATRIX
-    model = model or NCF_MODEL
+    if user_item_matrix is None:
+        user_item_matrix = USER_ITEM_MATRIX
+    if model is None:
+        model = NCF_MODEL
 
     if user_item_matrix is None or model is None:
         print("Error: USER_ITEM_MATRIX or NCF_MODEL is not loaded.")
