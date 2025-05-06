@@ -1,5 +1,6 @@
 from flask_backend import app
-from neural_collaborative_filtering import load_ncf_model, predict_user_item_interactions
+from model_loader import load_ncf_model  # Import from model_loader
+from neural_collaborative_filtering import predict_user_item_interactions
 from supabase_storage import download_file_if_needed
 import pandas as pd
 
@@ -19,7 +20,7 @@ def test_collaborative_filtering():
         num_users, num_items = user_item_matrix.shape
         model = load_ncf_model(
             model_path=model_path,
-            user_item_matrix=user_item_matrix_path,
+            user_item_matrix=user_item_matrix,
             num_users=num_users,
             num_items=num_items,
             latent_dim=20,
