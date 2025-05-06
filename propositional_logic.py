@@ -4,70 +4,13 @@ import numpy as np  # Import numpy for array operations
 from database import db, Item, Interaction  # Import from database.py
 from thresholds import unified_thresholds  # Import dynamic thresholds
 from ml_model import content_based_filtering  # Use trained data for thresholds
-from neural_collaborative_filtering import predict_user_item_interactions, load_ncf_model
+from neural_collaborative_filtering import predict_user_item_interactions
 from plans import PLANS  # Import plans from plans dictionary
 from utils import filter_irrelevant_plans  # Import the filtering function
-from supabase_storage import download_file_if_needed
+from resource_manager import get_user_item_matrix, get_ncf_model  # Use resource manager for shared resources
+import torch
 
 # Description: This file contains the propositional logic for the insurance recommender system.
-
-NCF_MODEL = None
-USER_ITEM_MATRIX_DF = None  # Pandas DataFrame with column labels
-USER_ITEM_MATRIX = None     # NumPy array for model input
-
-def load_ncf_resources():
-    global NCF_MODEL, USER_ITEM_MATRIX_DF, USER_ITEM_MATRIX
-    try:
-        # Check if there are any interactions in the database
-        interaction_count = db.session.query(Interaction).count()
-        if (interaction_count == 0):
-            print("No interactions found in the database. Skipping NCF model loading.")
-            NCF_MODEL = None
-            USER_ITEM_MATRIX_DF = None
-            USER_ITEM_MATRIX = None
-            return
-
-        # Download user-item matrix and model from Supabase
-        csv_path = download_file_if_needed("user_item_matrix.csv")
-        model_path = download_file_if_needed("ncf_model.pth")
-        
-        # Load user-item matrix
-        USER_ITEM_MATRIX_DF = pd.read_csv(csv_path, index_col=0)
-        if (USER_ITEM_MATRIX_DF.empty or
-            (USER_ITEM_MATRIX_DF.shape[0] == 1 and USER_ITEM_MATRIX_DF.shape[1] == 1)):
-            print("User-item matrix is not meaningful. Skipping NCF model loading.")
-            NCF_MODEL = None
-            USER_ITEM_MATRIX_DF = None
-            USER_ITEM_MATRIX = None
-            return
-
-        # Convert to NumPy array for model input
-        USER_ITEM_MATRIX = USER_ITEM_MATRIX_DF.to_numpy()
-
-        # Debugging log: Check the shape of the loaded matrix
-        print(f"Loaded USER_ITEM_MATRIX with shape: {USER_ITEM_MATRIX.shape}")
-
-        # Load the NCF model
-        num_users, num_items = USER_ITEM_MATRIX.shape
-        NCF_MODEL = load_ncf_model(
-            model_path=model_path,
-            user_item_matrix=csv_path,
-            num_users=num_users,
-            num_items=num_items,
-            latent_dim=20,
-            hidden_dim=64
-        )
-        print("NCF model and user-item matrix loaded successfully.")
-    except FileNotFoundError:
-        print("The user_item_matrix.csv file was not found. Skipping NCF model loading.")
-        NCF_MODEL = None
-        USER_ITEM_MATRIX_DF = None
-        USER_ITEM_MATRIX = None
-    except Exception as e:
-        print(f"Error loading NCF resources: {e}. Skipping NCF model loading.")
-        NCF_MODEL = None
-        USER_ITEM_MATRIX_DF = None
-        USER_ITEM_MATRIX = None
 
 def get_or_create_item(plan_name, plan_description):
     """
@@ -85,12 +28,36 @@ def get_or_create_item(plan_name, plan_description):
         db.session.commit()
     return item.id
 
+def batch_predict_scores(model, user_idx, item_indices):
+    """
+    Predict scores for all items for a given user in a single batch.
+    Always returns a 1D numpy array.
+    """
+    model.eval()
+    with torch.no_grad():
+        user_tensor = torch.LongTensor([user_idx] * len(item_indices))
+        item_tensor = torch.LongTensor(item_indices)
+        scores_tensor = model(user_tensor, item_tensor)
+        scores = scores_tensor.cpu().numpy()  # Ensure it's a NumPy array
+        if scores.ndim == 0:
+            scores = np.array([scores.item()])
+        return scores
+
 # Recommendation function
 def recommend_plan(user_input, priority="", ml_prediction_df=None):
-    global NCF_MODEL, USER_ITEM_MATRIX, USER_ITEM_MATRIX_DF
-    print("Starting recommend_plan function...")  # Debugging log
-    print(f"User input: {user_input}")  # Debugging log
-    print(f"Priority: {priority}")  # Debugging log
+    print("Starting recommend_plan function...")
+    print(f"User input: {user_input}")
+
+    user_item_matrix_df = get_user_item_matrix()
+    ncf_model = get_ncf_model()
+
+    if user_item_matrix_df is None or ncf_model is None:
+        print("Error: User-item matrix or NCF model is not loaded.")
+        return [{"priority": "error", "justification": "Model or matrix not available."}]
+
+    user_item_matrix = user_item_matrix_df.to_numpy()
+    print(f"User-item matrix loaded with shape: {user_item_matrix.shape}")
+    print(f"Priority: {priority}")
 
     # Avoid printing large DataFrames or objects
     if ml_prediction_df is not None:
@@ -102,11 +69,6 @@ def recommend_plan(user_input, priority="", ml_prediction_df=None):
     user_id = 1
     user_input["user_id"] = user_id
 
-    # Ensure the NCF model and matrix are loaded
-    load_ncf_resources()
-    if (NCF_MODEL is None or USER_ITEM_MATRIX is None or USER_ITEM_MATRIX_DF is None):
-        print("Collaborative filtering skipped due to missing NCF model or user-item matrix.")  # Debugging log
-
     # Handle the case where there are no interactions
     interaction_count = db.session.query(Interaction).count()
     if (interaction_count == 0):
@@ -115,15 +77,15 @@ def recommend_plan(user_input, priority="", ml_prediction_df=None):
     # Proceed with rule-based recommendations regardless of interactions or matrix availability
     recommendations = []
 
-    # If USER_ITEM_MATRIX_DF is available, proceed with matrix-related logic
-    if (USER_ITEM_MATRIX_DF is not None):
-        print("USER_ITEM_MATRIX_DF is available. Proceeding with matrix-related logic.")  # Debugging log
+    # If user_item_matrix_df is available, proceed with matrix-related logic
+    if (user_item_matrix_df is not None):
+        print("user_item_matrix_df is available. Proceeding with matrix-related logic.")  # Debugging log
         try:
             # Ensure item_id values are integers
-            USER_ITEM_MATRIX_DF.columns = USER_ITEM_MATRIX_DF.columns.astype(int)
+            user_item_matrix_df.columns = user_item_matrix_df.columns.astype(int)
 
             # Generate the mapping directly from the user-item matrix columns
-            matrix_index_to_item_id = {index: item_id for index, item_id in enumerate(USER_ITEM_MATRIX_DF.columns)}
+            matrix_index_to_item_id = {index: item_id for index, item_id in enumerate(user_item_matrix_df.columns)}
             item_id_to_matrix_index = {item_id: index for index, item_id in matrix_index_to_item_id.items()}
 
             # Debugging log: Check mappings
@@ -131,7 +93,7 @@ def recommend_plan(user_input, priority="", ml_prediction_df=None):
             print("Item_id to matrix index mapping:", item_id_to_matrix_index)
 
             # Verify that all items in the matrix have interactions
-            valid_item_ids = set(USER_ITEM_MATRIX_DF.columns)
+            valid_item_ids = set(user_item_matrix_df.columns)
             interactions = Interaction.query.all()
             interaction_item_ids = {int(i.item_id) for i in interactions}  # Ensure item_id is an integer
 
@@ -157,8 +119,8 @@ def recommend_plan(user_input, priority="", ml_prediction_df=None):
 
             # Map the actual user_id to the zero-based index in the matrix
             user_index = None  # Initialize user_index to None
-            if user_id in USER_ITEM_MATRIX_DF.index:
-                user_index = USER_ITEM_MATRIX_DF.index.tolist().index(user_id)
+            if user_id in user_item_matrix_df.index:
+                user_index = user_item_matrix_df.index.tolist().index(user_id)
                 print(f"Mapped user_id {user_id} to user_index {user_index}.")  # Debugging log
             else:
                 print(f"User ID {user_id} not found in the user-item matrix.")  # Debugging log
@@ -166,14 +128,14 @@ def recommend_plan(user_input, priority="", ml_prediction_df=None):
                 user_index = None  # Skip collaborative filtering for this user
 
             # Ensure the user-item matrix is a NumPy array
-            if USER_ITEM_MATRIX is not None:
+            if user_item_matrix is not None:
                 print("Converting user-item matrix to NumPy array...")  # Debugging log
-                USER_ITEM_MATRIX = USER_ITEM_MATRIX_DF.values
+                user_item_matrix = user_item_matrix_df.values
 
         except Exception as e:
             print(f"Error during matrix-related logic: {e}")  # Debugging log
     else:
-        print("USER_ITEM_MATRIX_DF is not available. Skipping matrix-related logic.")  # Debugging log
+        print("user_item_matrix_df is not available. Skipping matrix-related logic.")  # Debugging log
 
     # Extract additional user inputs
     age_group = user_input.get('age', '18-29')
@@ -570,13 +532,13 @@ def recommend_plan(user_input, priority="", ml_prediction_df=None):
         rec for rec in recommendations if (rec.get("priority") == "strongly recommended")
     ]
 
-    if (not strongly_recommended_plans and USER_ITEM_MATRIX is not None):
+    if (not strongly_recommended_plans and user_item_matrix is not None):
         # Step 1: Filter irrelevant plans during content-based filtering
         plans = [{"id": item.id, "name": item.name, "description": item.description} for item in Item.query.all()]
         filtered_plans = filter_irrelevant_plans(plans, user_input)
 
         # Step 2.1: Validate plans against the user-item matrix
-        valid_item_ids = set(USER_ITEM_MATRIX_DF.columns)
+        valid_item_ids = set(user_item_matrix_df.columns)
         filtered_plans = [plan for plan in filtered_plans if (plan["id"] in valid_item_ids)]
 
         # Step 2.2: Log warnings for plans with no interactions but do not exclude them
@@ -599,13 +561,11 @@ def recommend_plan(user_input, priority="", ml_prediction_df=None):
                 if item_id in item_id_to_matrix_index:
                     matrix_index = item_id_to_matrix_index[item_id]
                     # Get the collaborative filtering score for the item
-                    cf_score = predict_user_item_interactions(
-                        NCF_MODEL,
-                        USER_ITEM_MATRIX,
+                    cf_score = batch_predict_scores(
+                        ncf_model,
                         user_index,
-                        top_k=None,
-                        matrix_index_to_item_id=matrix_index_to_item_id
-                    ).get(item_id, 0)  # Default to 0 if not found
+                        [matrix_index]
+                    )[0]  # Default to 0 if not found
                     item_scores[item_id] = cf_score
                     print(f"Item ID: {item_id}, Matrix Index: {matrix_index}, CF Score: {cf_score}")
                 else:
@@ -629,32 +589,31 @@ def recommend_plan(user_input, priority="", ml_prediction_df=None):
 
         # Step 3: Rank filtered plans using collaborative filtering
         def rank_with_collaborative_filtering(recommendations, user_index):
-            if USER_ITEM_MATRIX is None:
-                print("USER_ITEM_MATRIX is None. Skipping collaborative filtering.")  # Debugging log
+            if user_item_matrix is None:
+                print("user_item_matrix is None. Skipping collaborative filtering.")  # Debugging log
                 return recommendations
             try:
-                if USER_ITEM_MATRIX.shape[1] < 2:
+                if user_item_matrix.shape[1] < 2:
                     raise ValueError("Insufficient items in the user-item matrix for collaborative filtering.")
 
                 # Ensure top_k is an integer
-                top_k = int(USER_ITEM_MATRIX.shape[1] // 2)
+                top_k = int(user_item_matrix.shape[1] // 2)
 
-                predicted_scores = predict_user_item_interactions(
-                    NCF_MODEL,
-                    USER_ITEM_MATRIX,
+                item_indices = list(range(user_item_matrix.shape[1]))
+                predicted_scores = batch_predict_scores(
+                    ncf_model,
                     user_index,
-                    top_k=top_k,
-                    matrix_index_to_item_id=matrix_index_to_item_id  # Pass the corrected mapping
+                    item_indices
                 )
 
                 for rec in recommendations:
                     item_id = rec.get("item_id")
-                    if item_id not in predicted_scores:
+                    if item_id not in matrix_index_to_item_id.values():
                         print(f"Warning: item_id {item_id} is not in the predicted scores. Skipping.")
                         rec["score"] = 0
                         continue
 
-                    rec["score"] = predicted_scores[item_id]
+                    rec["score"] = predicted_scores[item_id_to_matrix_index[item_id]]
                     # Ensure only one disclaimer is added
                     if "disclaimer_note" not in rec:
                         rec["disclaimer_note"] = "These plans are generated using advanced filtering techniques to provide additional insights."
@@ -669,8 +628,8 @@ def recommend_plan(user_input, priority="", ml_prediction_df=None):
         recommendations = rank_with_collaborative_filtering(recommendations, user_index)
 
     # Filter recommendations to include only items present in the matrix for collaborative/content-based filtering
-    if USER_ITEM_MATRIX_DF is not None:  # Use USER_ITEM_MATRIX_DF for metadata
-        valid_item_ids = set(USER_ITEM_MATRIX_DF.columns)
+    if user_item_matrix_df is not None:  # Use user_item_matrix_df for metadata
+        valid_item_ids = set(user_item_matrix_df.columns)
         filtered_recommendations = []
         for rec in recommendations:
             if rec.get("priority") in ["content-based", "collaborative filtering"]:
@@ -683,12 +642,12 @@ def recommend_plan(user_input, priority="", ml_prediction_df=None):
                 # Include rule-based recommendations without filtering
                 filtered_recommendations.append(rec)
     else:
-        print("USER_ITEM_MATRIX_DF is None. Skipping filtering based on matrix.")  # Debugging log
+        print("user_item_matrix_df is None. Skipping filtering based on matrix.")  # Debugging log
         filtered_recommendations = recommendations
 
     # Limit the number of recommendations displayed to the user
     MAX_RECOMMENDATIONS = 3
-    final_recommendations = remove_duplicates(filtered_recommendations)[:MAX_RECOMMENDATIONS] if (USER_ITEM_MATRIX is not None) else filtered_recommendations[:MAX_RECOMMENDATIONS]
+    final_recommendations = remove_duplicates(filtered_recommendations)[:MAX_RECOMMENDATIONS] if (user_item_matrix is not None) else filtered_recommendations[:MAX_RECOMMENDATIONS]
 
     # Fallback if no recommendations exist
     if (not final_recommendations):
