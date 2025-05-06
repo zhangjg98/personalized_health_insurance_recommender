@@ -33,7 +33,7 @@ class NeuralCollaborativeFiltering(nn.Module):
         x = torch.cat([user_emb, item_emb], dim=1)
         return self.sigmoid(self.fc_layers(x)).squeeze()
 
-def train_and_save_model(user_item_matrix, latent_dim=50, hidden_dim=128, epochs=20, lr=0.001, dropout_rate=0.3, l2_reg=0.001, model_path="ncf_model.pth", pretrained_item_embeddings=None):
+def train_and_save_model(user_item_matrix, latent_dim=20, hidden_dim=64, epochs=10, lr=0.001, dropout_rate=0.3, l2_reg=0.001, model_path="ncf_model.pth", pretrained_item_embeddings=None):
     num_users, num_items = user_item_matrix.shape
     model = NeuralCollaborativeFiltering(num_users, num_items, latent_dim, hidden_dim, dropout_rate, pretrained_item_embeddings)
     optimizer = optim.Adam(model.parameters(), lr=lr, weight_decay=l2_reg)
