@@ -54,8 +54,8 @@ def load_ncf_resources():
             user_item_matrix=csv_path,
             num_users=num_users,
             num_items=num_items,
-            latent_dim=50,
-            hidden_dim=128
+            latent_dim=20,
+            hidden_dim=64
         )
         print("NCF model and user-item matrix loaded successfully.")
     except FileNotFoundError:
