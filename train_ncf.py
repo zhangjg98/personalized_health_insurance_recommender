@@ -1,13 +1,14 @@
 import os
 import pandas as pd
 from database import db, Interaction
-from neural_collaborative_filtering import train_and_save_model, load_ncf_model
+from training_utils import train_and_save_model
 from evaluation_metrics import evaluate_model_metrics # Import from evaluation_metrics.py
 from flask import Flask
 from plans import PLANS
 from dotenv import load_dotenv
 import requests
 import torch
+from model_loader import load_ncf_model  # Import from model_loader
 
 load_dotenv()
 
