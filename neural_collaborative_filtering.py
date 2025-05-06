@@ -7,70 +7,11 @@ from ml_model import generate_embeddings  # Import content-based embedding gener
 import psutil  # Import psutil for memory monitoring
 import pandas as pd  # Import pandas for DataFrame handling
 import os  # Import os for process management
+from models import NeuralCollaborativeFiltering  # Import from models.py
+from resource_manager import get_user_item_matrix, get_ncf_model  # Import cached resources
 
-class NeuralCollaborativeFiltering(nn.Module):
-    def __init__(self, num_users, num_items, latent_dim, hidden_dim, dropout_rate=0.3, pretrained_item_embeddings=None):
-        super(NeuralCollaborativeFiltering, self).__init__()
-        self.user_embedding = nn.Embedding(num_users, latent_dim)
-        self.item_embedding = nn.Embedding(num_items, latent_dim)
-
-        # Initialize item embeddings with pretrained embeddings if provided
-        if pretrained_item_embeddings is not None:
-            self.item_embedding.weight.data.copy_(torch.tensor(pretrained_item_embeddings, dtype=torch.float32))
-
-        self.fc_layers = nn.Sequential(
-            nn.Linear(latent_dim * 2, hidden_dim),
-            nn.BatchNorm1d(hidden_dim),
-            nn.ReLU(),
-            nn.Dropout(dropout_rate),
-            nn.Linear(hidden_dim, 1)
-        )
-        self.sigmoid = nn.Sigmoid()
-
-    def forward(self, user, item):
-        user_emb = self.user_embedding(user)
-        item_emb = self.item_embedding(item)
-        x = torch.cat([user_emb, item_emb], dim=1)
-        return self.sigmoid(self.fc_layers(x)).squeeze()
-
-def train_and_save_model(user_item_matrix, latent_dim=20, hidden_dim=64, epochs=10, lr=0.001, dropout_rate=0.3, l2_reg=0.001, model_path="ncf_model.pth", pretrained_item_embeddings=None):
-    num_users, num_items = user_item_matrix.shape
-    model = NeuralCollaborativeFiltering(num_users, num_items, latent_dim, hidden_dim, dropout_rate, pretrained_item_embeddings)
-    optimizer = optim.Adam(model.parameters(), lr=lr, weight_decay=l2_reg)
-    criterion = nn.BCELoss()
-
-    user_item_tensor = torch.tensor(user_item_matrix, dtype=torch.float32)
-    user_indices, item_indices = user_item_tensor.nonzero(as_tuple=True)
-    ratings = user_item_tensor[user_indices, item_indices]
-
-    # Normalize ratings to the range [0, 1]
-    max_rating = ratings.max().item()
-    if max_rating > 1.0:
-        ratings = ratings / max_rating
-
-    # Assign higher weights to rare items
-    item_interaction_counts = torch.bincount(item_indices, minlength=num_items)
-    weights = 1.0 / (item_interaction_counts[item_indices] + 1.0)  # Inverse frequency weighting
-
-    for epoch in range(epochs):
-        model.train()
-        optimizer.zero_grad()
-        predictions = model(user_indices, item_indices)
-        loss = criterion(predictions, ratings) * weights.mean()  # Apply weighted loss
-        loss.backward()
-        optimizer.step()
-        print(f"Epoch {epoch + 1}/{epochs}, Loss: {loss.item()}")
-
-    torch.save({
-        "model_state_dict": model.state_dict(),
-        "num_users": num_users,
-        "num_items": num_items,
-        "latent_dim": latent_dim,
-        "hidden_dim": hidden_dim,
-        "dropout_rate": dropout_rate
-    }, model_path)
-    print(f"Model saved to {model_path}")
-    return model
+USER_ITEM_MATRIX = get_user_item_matrix()
+NCF_MODEL = get_ncf_model()
 
 def hybrid_recommendation(user_input, user_item_matrix, model, top_k=5, matrix_index_to_item_id=None, plans=None):
     """
@@ -157,86 +98,20 @@ def recall_at_k_dynamic(predictions, ground_truth, k):
     adjusted_k = min(k, len(relevant_items))  # Adjust K dynamically
     return len(recommended_items & relevant_items) / adjusted_k if adjusted_k > 0 else 0
 
-def load_ncf_model(model_path="ncf_model.pth", user_item_matrix=None, num_users=None, num_items=None, latent_dim=20, hidden_dim=64, dropout_rate=0.3):
+def predict_user_item_interactions(model=None, user_item_matrix=None, user_id=None, top_k=5, matrix_index_to_item_id=None):
     """
-    Load NCF model and ensure compatibility with the current matrix shape.
-    Handles both metadata-included and legacy model files.
-    Retrains the model if metadata does not match.
+    Predict user-item interactions using the NCF model.
     """
-    print(f"Loading NCF model from {model_path}...")
+    print("Starting predict_user_item_interactions function...")  # Debugging log
 
-    if not os.path.exists(model_path):
-        print(f"Model file {model_path} not found. Retraining the model...")
-        if isinstance(user_item_matrix, str):
-            print(f"Loading user-item matrix from file: {user_item_matrix}")
-            user_item_matrix = pd.read_csv(user_item_matrix, index_col=0).values  # Load as NumPy array
-        if user_item_matrix is not None:
-            return train_and_save_model(
-                user_item_matrix=user_item_matrix,
-                latent_dim=latent_dim,
-                hidden_dim=hidden_dim,
-                dropout_rate=dropout_rate,
-                model_path=model_path
-            )
-        else:
-            print("Error: user_item_matrix is required to retrain the model.")
-            return None
+    # Use the globally cached USER_ITEM_MATRIX and NCF_MODEL if not provided
+    user_item_matrix = user_item_matrix or USER_ITEM_MATRIX
+    model = model or NCF_MODEL
 
-    data = torch.load(model_path)
+    if user_item_matrix is None or model is None:
+        print("Error: USER_ITEM_MATRIX or NCF_MODEL is not loaded.")
+        return {}
 
-    # Determine if metadata is included
-    if isinstance(data, dict) and 'model_state_dict' in data:
-        # Load full config from saved metadata
-        saved_num_users = data['num_users']
-        saved_num_items = data['num_items']
-        saved_latent_dim = data['latent_dim']
-        saved_hidden_dim = data['hidden_dim']
-
-        # Check for dimension mismatches
-        if (saved_num_users != num_users or
-            saved_num_items != num_items or
-            saved_latent_dim != latent_dim or
-            saved_hidden_dim != hidden_dim):
-            print("Model architecture mismatch detected:")
-            print(f"Saved model: num_users={saved_num_users}, num_items={saved_num_items}, latent_dim={saved_latent_dim}, hidden_dim={saved_hidden_dim}")
-            print(f"Current model: num_users={num_users}, num_items={num_items}, latent_dim={latent_dim}, hidden_dim={hidden_dim}")
-            print("Retraining the model with updated dimensions...")
-            if isinstance(user_item_matrix, str):
-                print(f"Loading user-item matrix from file: {user_item_matrix}")
-                user_item_matrix = pd.read_csv(user_item_matrix, index_col=0).values  # Load as NumPy array
-            if user_item_matrix is not None:
-                return train_and_save_model(
-                    user_item_matrix=user_item_matrix,
-                    latent_dim=latent_dim,
-                    hidden_dim=hidden_dim,
-                    dropout_rate=dropout_rate,
-                    model_path=model_path
-                )
-            else:
-                print("Error: user_item_matrix is required to retrain the model.")
-                return None
-
-        model = NeuralCollaborativeFiltering(
-            num_users=saved_num_users,
-            num_items=saved_num_items,
-            latent_dim=saved_latent_dim,
-            hidden_dim=saved_hidden_dim,
-            dropout_rate=dropout_rate
-        )
-        model.load_state_dict(data['model_state_dict'])
-    else:
-        # Fallback for old format: raw state_dict only
-        if num_users is None or num_items is None:
-            print("Error: num_users and num_items must be provided for legacy model files.")
-            return None
-
-        model = NeuralCollaborativeFiltering(num_users, num_items, latent_dim, hidden_dim, dropout_rate)
-        model.load_state_dict(data)
-
-    print("Model loaded successfully.")
-    return model
-
-def predict_user_item_interactions(model, user_item_matrix, user_id, top_k=5, matrix_index_to_item_id=None):
     print("Starting predict_user_item_interactions function...")  # Keep concise logs
     process = psutil.Process(os.getpid())
     print(f"Memory usage at start: {process.memory_info().rss / 1024 ** 2:.2f} MB")
