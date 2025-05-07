@@ -3,10 +3,11 @@ name: Build and Deploy to Render
 on:
   push:
     branches:
-      - main  # or your default branch
+      - main
 
 jobs:
   build-deploy:
+    if: '!contains(github.event.head_commit.message, "[skip ci]")'  # Skip deploy if [skip ci] is in the commit message
     runs-on: ubuntu-latest
 
     env:
