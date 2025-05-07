@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { Container, Form, Button, Card, Row, Col, Alert } from "react-bootstrap";
 import ReactTooltip from "react-tooltip";
-import { BrowserRouter as Router, Routes, Route, Link } from "react-router-dom"; // Replace Switch with Routes
+import { HashRouter as Router, Routes, Route, Link } from "react-router-dom";
 import "bootstrap/dist/css/bootstrap.min.css";
 import MetricsDashboard from "./MetricsDashboard"; // Ensure MetricsDashboard is imported only once
 import { createClient } from '@supabase/supabase-js';
@@ -150,7 +150,7 @@ const logSpecificPlanFeedback = async () => {
     if (!selectedRecommendation || specificFeedbackGiven) return; // Prevent logging without a selected recommendation
 
     try {
-        const backendUrl = process.env.REACT_APP_BACKEND_URL?.replace(/\/+$/, "") || "http://127.0.0.1:5000";
+        const backendUrl = "http://127.0.0.1:5000";
         const response = await fetch(`${backendUrl}/log_interaction`, { // Use backend URL
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -218,10 +218,10 @@ const logSpecificPlanFeedback = async () => {
   }, [recommendations]);
 
   return (
-    <Router basename={process.env.NODE_ENV === 'production' ? '/personalized_health_insurance_recommender' : ''}>
+    <Router> {/* Use HashRouter */}
       <Container className="mt-4">
         <h1 className="mb-4 text-center">Personalized Health Insurance Recommender</h1>
-        <Routes> {/* Replace Switch with Routes */}
+        <Routes>
           {/* Main App Route */}
           <Route path="/" element={
             <>
