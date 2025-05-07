@@ -1,12 +1,24 @@
 # Personalized Health Insurance Recommender
 
-This program is a health insurance plan recommendation system built using Flask and propositional logic. It provides plan suggestions based on user input for fields such as age, income, BMI, smoker status, and more. It is currently in the process of being re-purposed to incorporate machine learning to handle more complex cases as well as incorporating React on the front-end.
+This web application is a health insurance plan recommendation system built using user inputs, rule-based logic and AI-driven techniques. It provides plan suggestions based on user input for fields such as age, income, BMI, smoker status, and more. The goal is to ease decision making related to insurance and provide a user-tailored experience related to individual needs.
 
-## How the Code Works
+## Features
 
 The application is built on the following components:
-- **Flask Application**: Handles the user input and displays recommendations via web routes.
+- **Interactive Web App**: Built with Flask (backend) and React (frontend), allowing users to provide inputs and view personalized recommendations easily.
 - **Propositional Rule Logic**: Propositional logic rules evaluate user input to generate plan recommendations.
+- **AI-Powered Personalization**:
+  - **Autoencoder Model**: Model that is trained on multi-year Medicare data to predict state-level spending and identify unusual health cost patterns.
+  - **Hybrid Recommendation Model**:
+    - *Content-Based Filtering*: Uses similarity scores between user input and plan descriptions.
+    - *Neural Collaborative Filtering*: Learns latent relationships between users and insurance plans to predict preference scores.
+- **Demographic & Regional Insights**: Recommendations adapt based on user ethnicity and gender when state-level data is provided.
+- **Feedback Integration**: Users can rate which plan was most useful. Feedback is stored in a database to improve future recommendations.
+- **Cold-Start Handling**: If inputs don't match any rule, the hybrid model steps in to ensure useful suggestions are still delivered.
+
+## App Host
+- **Frontend** (GitHub Pages): [https://zhangjg98.github.io/personalized_health_insurance_recommender/](https://zhangjg98.github.io/personalized_health_insurance_recommender/)
+- **Backend** (Render): API handles logic and model inference.
 
 ## Basis for Rule Logic and Justifications
 
@@ -17,15 +29,12 @@ The rules are designed around considerations like:
 
 Each recommendation includes a justification to explain its reasoning, ensuring users understand the logic.
 
-## How to Run the Code
+### Model Evaluation Metrics
+- **Hit Rate**: Measures if at least one useful plan was recommended.
+- **NDCG@K**: Evaluates ranking quality.
+- **Precision@K**: Accuracy of top-K recommendations.
+- **Recall@K**: Coverage of relevant plans in the top-K results.
 
-Make sure that you have downloaded all of the files in this repository.
-
-Running this program requires Python, Flask, and React. If you do not have Flask downloaded on your system, you should download the `requirements.txt` file and use the command `pip install -r requirements.txt` to download the necessary libraries to run this program.
-
-Use the command `chmod +x start.sh` to be able to run the script. Then use the command `./start.sh`, and the program should automatically open on your Internet browser. The python command might vary depending on what version of Python is installed.
-
-### Future Improvements
-
-- Integrate Machine Learning techniques to handle more complex cases and ensure more scalable recommendations.
-- Utilization of datasets to apply real-life data into the system and help with more nuanced, niche cases.
+## Potential Future Improvements
+- Allow user login to save history and feedback.
+- Expansion of ML model usage with broader health datasets.
