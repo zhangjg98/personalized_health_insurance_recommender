@@ -8,15 +8,11 @@ import base64
 
 db = SQLAlchemy()
 
-# Generate or load a valid Fernet key
-key_file = "fernet_key.key"
-if not os.path.exists(key_file):
-    print("Fernet key not found. Generating a new key...")
-    with open(key_file, "wb") as f:
-        f.write(Fernet.generate_key())
+# Load the Fernet key from an environment variable
+encryption_key = os.getenv("FERNET_KEY")
 
-with open(key_file, "rb") as f:
-    encryption_key = f.read()
+if not encryption_key:
+    raise ValueError("Fernet key not found in environment variables.")
 
 # Validate the Fernet key
 try:
