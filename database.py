@@ -5,6 +5,9 @@ from cryptography.fernet import Fernet
 import os
 from sqlalchemy.exc import OperationalError, InvalidRequestError
 import base64
+from dotenv import load_dotenv
+
+load_dotenv()
 
 db = SQLAlchemy()
 
