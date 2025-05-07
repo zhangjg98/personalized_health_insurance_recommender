@@ -3,7 +3,7 @@ name: Deploy Frontend to GitHub Pages
 on:
   push:
     tags:
-      - 'frontend-v1.0.0'
+      - 'frontend-v1.0.1'
 
 permissions:
   contents: write
