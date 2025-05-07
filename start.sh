@@ -31,9 +31,8 @@ fi
 
 export FLASK_APP=flask_backend.py
 
-# Start Flask in the background and save its PID
-flask run --port=5000 &
-FLASK_PID=$!
+# Start the Flask app using Waitress
+waitress-serve --port=5000 flask_backend:app
 
 # Function to clean up Flask process and semaphore objects on exit
 cleanup() {
