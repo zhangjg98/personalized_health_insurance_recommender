@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify, render_template
+from flask import Flask, request, jsonify
 from flask_cors import CORS
 import pandas as pd
 import numpy as np
@@ -108,7 +108,8 @@ def log_request_info():
 
 @app.route('/')
 def home():
-    return render_template('index.html')
+    # Redirect to the React frontend
+    return jsonify({"message": "React frontend handles the UI."})
 
 def classify_value(value, thresholds):
     """
