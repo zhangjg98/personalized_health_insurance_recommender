@@ -37,7 +37,7 @@ FINAL_RBM, SCALER, PCA_MODEL = load_trained_objects()
 
 # Load thresholds dynamically
 THRESHOLDS = unified_thresholds(
-    "processed_user_item_matrix.csv",
+    "state_level_insights.csv",
     keys=[
         "TOT_MDCR_STDZD_PYMT_PC", 
         "TOT_MDCR_PYMT_PC", 
@@ -70,7 +70,7 @@ def predict_medicare_spending(state_name):
     Finally, it inverses both transformations to return predictions in the original scale.
     """
     # Load original data (for column names and later inverse transformation)
-    user_item_matrix = pd.read_csv('processed_user_item_matrix.csv', index_col=0)
+    user_item_matrix = pd.read_csv('state_level_insights.csv', index_col=0)
     
     # Debugging log: Check if the state exists in the dataset
     if state_name not in user_item_matrix.index:
