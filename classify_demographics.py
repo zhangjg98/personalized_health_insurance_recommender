@@ -21,7 +21,7 @@ def classify_demographics(states, output_file="demographic_classifications_train
 
     # Load thresholds for demographic variables with tighter quantiles
     thresholds = unified_thresholds(
-        "processed_user_item_matrix.csv",
+        "state_level_insights.csv",
         demographic_keys.keys(),
         lower_quantile=0.2,  # Narrow the lower quantile
         upper_quantile=0.8,  # Narrow the upper quantile
@@ -61,7 +61,7 @@ def classify_demographics(states, output_file="demographic_classifications_train
 
 if __name__ == "__main__":
     # Load the processed dataset to get the list of states
-    csv_path = "processed_user_item_matrix.csv"
+    csv_path = "state_level_insights.csv"
     df = pd.read_csv(csv_path, index_col=0)
     states = df.index.tolist()
 
