@@ -8,7 +8,7 @@ from sklearn.model_selection import KFold
 from models import DeepAutoencoder
 
 # Load the processed user-item matrix
-user_item_matrix = pd.read_csv('processed_user_item_matrix.csv', index_col=0)
+user_item_matrix = pd.read_csv('state_level_insights.csv', index_col=0)
 
 # Scale the data
 scaler = StandardScaler()
