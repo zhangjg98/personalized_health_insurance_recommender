@@ -59,7 +59,7 @@ keys_for_thresholds = [
     "MA_PRTCPTN_RATE",
     "BENE_DUAL_PCT"
 ]
-dynamic_thresholds = unified_thresholds("processed_user_item_matrix.csv", keys_for_thresholds)
+dynamic_thresholds = unified_thresholds("state_level_insights.csv", keys_for_thresholds)
 
 @lru_cache()
 def load_user_item_matrix_once():
@@ -194,7 +194,7 @@ def recommend():
         outlier_message = ""
         if state and ml_prediction_df is not None:
             # Load the "National" row for comparison
-            national_data = pd.read_csv("processed_user_item_matrix.csv", index_col=0).loc["National"]
+            national_data = pd.read_csv("state_level_insights.csv", index_col=0).loc["National"]
 
             # Add classification labels to ML predictions
             for key, friendly_name in friendly_names.items():
