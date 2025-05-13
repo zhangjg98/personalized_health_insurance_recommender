@@ -156,7 +156,7 @@ def recommend_plan(user_input, priority="", ml_prediction_df=None):
     demographic_keys = ["BENE_FEML_PCT", "BENE_RACE_BLACK_PCT", "BENE_RACE_HSPNC_PCT"]
     try:
         demographic_thresholds = unified_thresholds(
-            "processed_user_item_matrix.csv",
+            "state_level_insights.csv",
             demographic_keys,
             lower_quantile=0.2,
             upper_quantile=0.8,
