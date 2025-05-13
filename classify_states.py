@@ -15,7 +15,7 @@ friendly_names = {
 
 # Load thresholds dynamically
 thresholds = unified_thresholds(
-    "processed_user_item_matrix.csv",
+    "state_level_insights.csv",
     keys=list(friendly_names.keys())
 )
 
@@ -36,7 +36,7 @@ def classify_value(value, key):
     return "Low" if value < mid else "High"
 
 # Load the processed user-item matrix to get the list of states
-csv_path = "processed_user_item_matrix.csv"
+csv_path = "state_level_insights.csv"
 df = pd.read_csv(csv_path, index_col=0)
 states = df.index.tolist()
 
