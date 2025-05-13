@@ -58,5 +58,5 @@ if __name__ == "__main__":
         "ER_VISITS_PER_1000_BENES",
         "MA_PRTCPTN_RATE"
     ]
-    thresholds = compute_dynamic_thresholds("processed_user_item_matrix.csv", keys, scale_factor=1.3, use_z_score=True)
+    thresholds = compute_dynamic_thresholds("state_level_insights.csv", keys, scale_factor=1.3, use_z_score=True)
     print("Dynamic thresholds:", thresholds)
