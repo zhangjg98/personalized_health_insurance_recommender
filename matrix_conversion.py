@@ -37,7 +37,7 @@ df.iloc[:, 1:] = scaler.fit_transform(df.iloc[:, 1:])
 user_item_matrix = df.set_index('BENE_GEO_DESC')
 
 # Save the transformed matrix
-user_item_matrix.to_csv('processed_user_item_matrix.csv')
+user_item_matrix.to_csv('state_level_insights.csv')
 
 # Convert to PyTorch tensor (for training)
 user_item_tensor = torch.tensor(user_item_matrix.values, dtype=torch.float32)
