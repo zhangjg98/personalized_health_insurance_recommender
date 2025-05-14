@@ -3,7 +3,7 @@ import { Container, Form, Button, Card, Row, Col, Alert } from "react-bootstrap"
 import ReactTooltip from "react-tooltip";
 import { HashRouter as Router, Routes, Route, Link } from "react-router-dom";
 import "bootstrap/dist/css/bootstrap.min.css";
-import MetricsDashboard from "./MetricsDashboard"; // Ensure MetricsDashboard is imported only once
+import MetricsDashboard from "./MetricsDashboard";
 import { createClient } from '@supabase/supabase-js';
 
 const supabaseUrl = process.env.REACT_APP_SUPABASE_URL;
@@ -26,8 +26,8 @@ function App() {
     medical_care_frequency: "Low",
     preferred_plan_type: "",
     priority: "",
-    gender: "", // Add gender field
-    ethnicity: "", // Add ethnicity field
+    gender: "",
+    ethnicity: "",
   });
 
   const [recommendations, setRecommendations] = useState([]);
@@ -83,10 +83,9 @@ function App() {
             return 0;
         });
 
-        // Filter out SHAP explanations for rule-based recommendations
         const filteredRecommendations = sortedRecommendations.map((rec) => {
             if (rec.priority !== "content-based" && rec.priority !== "collaborative filtering") {
-                rec.shap_explanation = null; // Remove SHAP explanation for rule-based plans
+                rec.shap_explanation = null;
             }
             return rec;
         });
