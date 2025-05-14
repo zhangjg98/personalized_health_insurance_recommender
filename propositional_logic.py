@@ -4,7 +4,6 @@ import numpy as np  # Import numpy for array operations
 from database import db, Item, Interaction  # Import from database.py
 from thresholds import unified_thresholds  # Import dynamic thresholds
 from ml_model import content_based_filtering  # Use trained data for thresholds
-from neural_collaborative_filtering import predict_user_item_interactions
 from plans import PLANS  # Import plans from plans dictionary
 from utils import filter_irrelevant_plans  # Import the filtering function
 from resource_manager import get_user_item_matrix, get_ncf_model  # Use resource manager for shared resources
