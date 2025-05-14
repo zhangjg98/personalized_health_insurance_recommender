@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 import pandas as pd
 from sklearn.preprocessing import StandardScaler
-from sklearn.decomposition import PCA  # using PCA instead of SVD
+from sklearn.decomposition import PCA
 import pickle
 from models import DeepAutoencoder
 from thresholds import unified_thresholds
